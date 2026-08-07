@@ -18,38 +18,6 @@ Dev Containersを使用するには、以下がインストールされている
 4. 「Dev Containers」（Microsoft製）を選択します
 5. 「インストール」ボタンをクリックします
 
-## Dev Containerで開発環境を開く
-
-本書のハンズオン用リポジトリをDev Containerで開くには、以下の手順に従います。
-
-1. リポジトリをクローンします
-
-```bash
-git clone https://github.com/GenerativeAgents/evals-seminar-20260910.git
-```
-
-2. Visual Studio Codeでリポジトリを開きます
-
-```bash
-cd evals-seminar-20260910
-code .
-```
-
-3. Visual Studio Codeがリポジトリ内の`.devcontainer/devcontainer.json`を検出し、「Reopen in Container」（コンテナで再度開く）という通知が表示されます
-4. 通知をクリックするか、コマンドパレットから「Dev Containers: Reopen in Container」を実行します
-5. 初回起動時はコンテナのビルドに数分かかります。完了すると、コンテナ内の開発環境でVisual Studio Codeが開きます
-
-## トラブルシューティング
-
-### Dockerが起動していない場合
-
-「Cannot connect to the Docker daemon」というエラーが表示される場合は、Docker Desktopが起動しているか確認してください。
-
-### コンテナのビルドに失敗する場合
-
-1. Docker Desktopに十分なリソース（メモリ、CPU）が割り当てられているか確認してください
-2. コマンドパレットから「Dev Containers: Rebuild Container」を実行して、再ビルドを試みてください
-
 ## 参考リンク
 
 - [Dev Containers拡張機能（Visual Studio Marketplace）](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
