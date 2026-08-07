@@ -18,8 +18,7 @@ improvement-2   本文照合・一般化禁止・照合できない数値は書�
 
 ## 前提条件
 
-- OpenRouter APIキー(エージェント実行: `deepseek/deepseek-v4-flash`)
-- OpenAI APIキー(評価judge: `gpt-5.4`)
+- OpenRouter APIキー(エージェント実行: `deepseek/deepseek-v4-flash`、評価judge: `openai/gpt-5.4`)
 - 実行環境(下記「環境構築」のどちらかの方法で用意)
 
 ## 環境構築
@@ -65,11 +64,9 @@ vi .env
 
 ```env
 OPENROUTER_API_KEY=your_openrouter_api_key_here
-OPENAI_API_KEY=your_openai_api_key_here
 ```
 
-- `OPENROUTER_API_KEY`: エージェント実行用(OpenRouter経由でdeepseek-v4-flashを呼び出す)
-- `OPENAI_API_KEY`: DeepEvalのjudgeモデル用(gpt-5.4)
+- `OPENROUTER_API_KEY`: エージェント実行と評価judgeの両方で使用(OpenRouter経由でdeepseek-v4-flashとopenai/gpt-5.4を呼び出す)
 
 ## エージェントの実行(ヘッドレスランナー)
 

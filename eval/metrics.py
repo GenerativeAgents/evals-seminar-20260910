@@ -1,13 +1,13 @@
 """
-DeepEval搭載メトリクスの組み立て。judgeは全メトリクスでgpt-5.4に統一する。
+DeepEval搭載メトリクスの組み立て。judgeは全メトリクスでOpenRouter経由のgpt-5.4に統一する。
 G-Evalはスコアをトークンのlogprobsで加重するため、judgeにはlogprobs対応モデルが必要。
 """
 
+import os
+
 from deepeval.metrics import GEval, SummarizationMetric, ToolCorrectnessMetric
+from deepeval.models import OpenRouterModel
 from deepeval.test_case import SingleTurnParams
-
-JUDGE_MODEL = "gpt-5.4"
-
 
 # 網羅性の判定質問。既定では実行のたびに自動生成されるためブレの原因になる。
 # 「原文でyesと答えられる質問」を固定し、要約が同じ答えを保っているかを測る
@@ -24,10 +24,17 @@ def build_metrics() -> list:
     # 取得: 期待したツール(論文取得のexecuteとgenerate_pptx)が呼ばれたか
     tool_correctness = ToolCorrectnessMetric()
 
+    judge_model = OpenRouterModel(
+        model="openai/gpt-5.4",
+        api_key=os.environ["OPENROUTER_API_KEY"],
+        base_url="https://openrouter.ai/api/v1",
+        temperature=0,
+    )
+
     # 要約: score = min(整合性, 網羅性)。input=論文本文, actual_output=スライドテキスト
     summarization = SummarizationMetric(
         threshold=0.5,
-        model=JUDGE_MODEL,
+        model=judge_model,
         assessment_questions=ASSESSMENT_QUESTIONS,
     )
 
@@ -43,7 +50,7 @@ def build_metrics() -> list:
         ],
         evaluation_params=[SingleTurnParams.INPUT, SingleTurnParams.ACTUAL_OUTPUT],
         threshold=0.5,
-        model=JUDGE_MODEL,
+        model=judge_model,
     )
 
     return [tool_correctness, summarization, slide_quality]
