@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "agent": "bun agent-run/run.ts",
+    "agent": "tsx agent-run/run.ts",
     "dev": "next dev",
     "check": "tsc --noEmit"
   },
@@ -29,6 +29,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "tailwindcss": "^4.2.1",
+    "tsx": "^4.23.10",
     "typescript": "6.0.3"
   }
 }

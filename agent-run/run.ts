@@ -11,7 +11,7 @@ loadDotenv({ path: path.join(ROOT, ".env"), quiet: true });
 const [arxivId, variant = "baseline"] = process.argv.slice(2);
 if (!arxivId) {
   console.error(
-    "Usage: bun agent-run/run.ts <arxivId> [baseline|improvement-1|improvement-2]",
+    "Usage: npm run agent -- <arxivId> [baseline|improvement-1|improvement-2]",
   );
   process.exit(1);
 }

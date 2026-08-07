@@ -2,7 +2,10 @@
 
 「arXiv論文→スライド生成」ワークフローを題材に、DeepEvalの搭載済みメトリクスだけで「計測→改善→再計測」のループを回すサンプルです。
 
-Software Design誌「実践LLMアプリケーション開発」[第36回のサンプルコード](https://github.com/mahm/softwaredesign-llm-application/tree/main/36)をセミナー用に再構成しています。
+Software Design誌「実践LLMアプリケーション開発」の[第32回](https://github.com/mahm/softwaredesign-llm-application/tree/main/32)(エージェント本体と対話UI)および[第36回](https://github.com/mahm/softwaredesign-llm-application/tree/main/36)(評価)のサンプルコードをセミナー用に再構成しています。
+
+> [!NOTE]
+> 元のサンプルコードはNode.jsとBunを使用していますが、本リポジトリは受講者がインストールするツールを減らすため、Node.jsのみで動くように変更しています。
 
 エージェント本体はTypeScript(deepagents)、評価はPython(DeepEval)で実装しています。
 
@@ -23,11 +26,11 @@ improvement-2   本文照合・一般化禁止・照合できない数値は書�
 
 ## 環境構築
 
-次のどちらかの方法で、Bun・Node.js・`uv`が使える環境を用意してください。
+次のどちらかの方法で、Node.jsと`uv`が使える環境を用意してください。
 
 ### 方法A: Dev Containerを使う
 
-Visual Studio CodeとDockerを使い、コンテナ内に開発環境を構築します。コンテナの起動時にBun・Node.js・`uv`が自動でインストールされます。
+Visual Studio CodeとDockerを使い、コンテナ内に開発環境を構築します。コンテナの起動時にNode.jsと`uv`が自動でインストールされます。
 
 1. [Visual Studio Codeをインストールする](docs/install-vscode.md)
 2. [Dockerをインストールする](docs/install-docker.md)
@@ -35,12 +38,11 @@ Visual Studio CodeとDockerを使い、コンテナ内に開発環境を構築�
 
 以降のコマンドは、コンテナ内のターミナルで実行してください。
 
-### 方法B: Bunとuvを直接インストールする
+### 方法B: Node.jsとuvを直接インストールする
 
-1. [Bun](https://bun.sh/docs/installation)をインストールします
-2. [Node.js](https://nodejs.org/)(v22以上)をインストールします(UIの起動に使用)
-3. [uv](https://docs.astral.sh/uv/getting-started/installation/)をインストールします
-4. リポジトリをクローンします
+1. [Node.js](https://nodejs.org/)(v22以上)をインストールします
+2. [uv](https://docs.astral.sh/uv/getting-started/installation/)をインストールします
+3. リポジトリをクローンします
 
 ```bash
 git clone https://github.com/GenerativeAgents/evals-seminar-20260910.git
@@ -52,7 +54,7 @@ cd evals-seminar-20260910
 依存関係をインストールします。
 
 ```bash
-bun install
+npm install
 uv sync
 ```
 
@@ -74,7 +76,7 @@ OPENROUTER_API_KEY=your_openrouter_api_key_here
 第32回の対話アプリ(CopilotKit + Next.js)を移植したものです。エージェントの挙動をブラウザ上で対話的に確認できます。
 
 ```bash
-bun run dev
+npm run dev
 ```
 
 http://localhost:3000 を開き、チャット欄にarXiv論文のURLを貼り付けるとスライド生成が始まります。左側にスライドのプレビューが表示され、生成完了後はPPTXをダウンロードできます。
@@ -92,9 +94,9 @@ http://localhost:3000 を開き、チャット欄にarXiv論文のURLを貼り�
 2. ターン2: 「OKです。この構成でスライドを生成してください。」→ `generate_pptx` ツールで生成する
 
 ```bash
-bun run agent 1706.03762 baseline
-bun run agent 1706.03762 improvement-1
-bun run agent 1706.03762 improvement-2
+npm run agent -- 1706.03762 baseline
+npm run agent -- 1706.03762 improvement-1
+npm run agent -- 1706.03762 improvement-2
 ```
 
 実行結果は `results/<variant>/<arXiv ID>.json` に保存されます。
@@ -104,9 +106,9 @@ bun run agent 1706.03762 improvement-2
 
 ```bash
 for id in 1706.03762 2512.07828 2603.03303; do
-  bun run agent "$id" baseline
-  bun run agent "$id" improvement-1
-  bun run agent "$id" improvement-2
+  npm run agent -- "$id" baseline
+  npm run agent -- "$id" improvement-1
+  npm run agent -- "$id" improvement-2
 done
 ```
 
@@ -164,7 +166,7 @@ uv run eval/run_eval.py improvement-2 --repeat 3
 ## 確認コマンド
 
 ```bash
-bun run check
+npm run check
 ```
 
 ## 参考リンク
