@@ -23,11 +23,11 @@ improvement-2   本文照合・一般化禁止・照合できない数値は書�
 
 ## 環境構築
 
-次のどちらかの方法で、Bunと`uv`が使える環境を用意してください。
+次のどちらかの方法で、Bun・Node.js・`uv`が使える環境を用意してください。
 
 ### 方法A: Dev Containerを使う
 
-Visual Studio CodeとDockerを使い、コンテナ内に開発環境を構築します。コンテナの起動時にBunと`uv`が自動でインストールされます。
+Visual Studio CodeとDockerを使い、コンテナ内に開発環境を構築します。コンテナの起動時にBun・Node.js・`uv`が自動でインストールされます。
 
 1. [Visual Studio Codeをインストールする](docs/install-vscode.md)
 2. [Dockerをインストールする](docs/install-docker.md)
@@ -38,8 +38,9 @@ Visual Studio CodeとDockerを使い、コンテナ内に開発環境を構築�
 ### 方法B: Bunとuvを直接インストールする
 
 1. [Bun](https://bun.sh/docs/installation)をインストールします
-2. [uv](https://docs.astral.sh/uv/getting-started/installation/)をインストールします
-3. リポジトリをクローンします
+2. [Node.js](https://nodejs.org/)(v22以上)をインストールします(UIの起動に使用)
+3. [uv](https://docs.astral.sh/uv/getting-started/installation/)をインストールします
+4. リポジトリをクローンします
 
 ```bash
 git clone https://github.com/GenerativeAgents/evals-seminar-20260910.git
@@ -67,6 +68,21 @@ OPENROUTER_API_KEY=your_openrouter_api_key_here
 ```
 
 - `OPENROUTER_API_KEY`: エージェント実行と評価judgeの両方で使用(OpenRouter経由でdeepseek-v4-flashとopenai/gpt-5.4を呼び出す)
+
+## UIの起動(対話アプリ)
+
+第32回の対話アプリ(CopilotKit + Next.js)を移植したものです。エージェントの挙動をブラウザ上で対話的に確認できます。
+
+```bash
+bun run dev
+```
+
+http://localhost:3000 を開き、チャット欄にarXiv論文のURLを貼り付けるとスライド生成が始まります。左側にスライドのプレビューが表示され、生成完了後はPPTXをダウンロードできます。
+
+ヘッダーの「ワークスペース」で `baseline` / `improvement-1` / `improvement-2` を切り替えられ、スキルの作り込み段階による挙動の違いを対話で見比べられます。切り替えると会話はリセットされます。
+
+> [!NOTE]
+> 会話の状態はインメモリで保持されるため、devサーバを再起動すると過去の会話の続きからは再開できません。
 
 ## エージェントの実行(ヘッドレスランナー)
 
@@ -121,6 +137,11 @@ uv run eval/run_eval.py improvement-2 --repeat 3
 │   └── system-prompt.ts        # システムプロンプト
 ├── agent-run/
 │   └── run.ts                  # ヘッドレスランナー
+├── app/                        # 第32回から移植した対話UI(Next.js + CopilotKit)
+│   ├── api/copilotkit/route.ts # CopilotKitランタイム(3ワークスペース分のエージェントを公開)
+│   ├── components/             # スライドプレビュー・ツール呼び出し表示
+│   ├── page.tsx                # 画面本体(ワークスペース切り替え付き)
+│   └── variants.ts             # ワークスペース一覧の共有定数
 ├── workspaces/
 │   ├── baseline/               # 機構のみのスキル
 │   ├── improvement-1/          # +スライド設計ガイド

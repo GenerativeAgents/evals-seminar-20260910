@@ -1,6 +1,8 @@
 .env
 
 node_modules/
+.next/
+tsconfig.tsbuildinfo
 .venv/
 __pycache__/
 .deepeval/
