@@ -1,6 +1,9 @@
-# Software Design誌「実践LLMアプリケーション開発」第36回サンプルコード
+# AI Agent評価体系構築セミナー ハンズオン（2026/9/10）
 
-第32回の「arXiv論文→スライド生成」ワークフローを題材に、DeepEvalの搭載済みメトリクスだけで「計測→改善→再計測」のループを回すサンプルです。
+「arXiv論文→スライド生成」ワークフローを題材に、DeepEvalの搭載済みメトリクスだけで「計測→改善→再計測」のループを回すサンプルです。
+
+Software Design誌「実践LLMアプリケーション開発」[第36回のサンプルコード](https://github.com/mahm/softwaredesign-llm-application/tree/main/36)をセミナー用に再構成しています。
+
 エージェント本体はTypeScript(deepagents)、評価はPython(DeepEval)で実装しています。
 
 3つのスキルの作り込み段階を持ち、各改善を直前の段階における改善と比較します。
@@ -15,19 +18,42 @@ improvement-2   本文照合・一般化禁止・照合できない数値は書�
 
 ## 前提条件
 
-- [mise](https://mise.jdx.dev/)
-- Bun
-- `uv`
 - OpenRouter APIキー(エージェント実行: `deepseek/deepseek-v4-flash`)
 - OpenAI APIキー(評価judge: `gpt-5.4`)
+- 実行環境(下記「環境構築」のどちらかの方法で用意)
+
+## 環境構築
+
+次のどちらかの方法で、Bunと`uv`が使える環境を用意してください。
+
+### 方法A: Dev Containerを使う
+
+Visual Studio CodeとDockerを使い、コンテナ内に開発環境を構築します。コンテナの起動時にBunと`uv`が自動でインストールされます。
+
+1. [Visual Studio Codeをインストールする](docs/install-vscode.md)
+2. [Dockerをインストールする](docs/install-docker.md)
+3. [Dev Containers拡張機能をインストールし、リポジトリをコンテナで開く](docs/install-devcontainer.md)
+
+以降のコマンドは、コンテナ内のターミナルで実行してください。
+
+### 方法B: Bunとuvを直接インストールする
+
+1. [Bun](https://bun.sh/docs/installation)をインストールします
+2. [uv](https://docs.astral.sh/uv/getting-started/installation/)をインストールします
+3. リポジトリをクローンします
+
+```bash
+git clone https://github.com/GenerativeAgents/evals-seminar-20260910.git
+cd evals-seminar-20260910
+```
 
 ## セットアップ
 
+依存関係をインストールします。
+
 ```bash
-mise trust 36/.mise.toml
-cd 36
-mise install
-mise run install
+bun install
+uv sync
 ```
 
 `.env` を作成し、APIキーを設定します。
@@ -91,7 +117,7 @@ uv run eval/run_eval.py improvement-2 --repeat 3
 ## ファイル構成
 
 ```text
-36/
+.
 ├── agent/                      # 第32回から流用したエージェント本体
 │   ├── agent.ts                # createDeepAgent定義(モデルはOpenRouter経由に変更)
 │   ├── generate-pptx-tool.ts   # generate_pptxツール(スキーマ検証内蔵)
@@ -111,9 +137,9 @@ uv run eval/run_eval.py improvement-2 --repeat 3
 │   ├── improvement-1/
 │   ├── improvement-2/
 │   └── eval/                   # 評価スコアと理由
+├── docs/                       # 環境構築手順
 ├── package.json
 ├── pyproject.toml
-├── .mise.toml
 └── .env.sample
 ```
 
