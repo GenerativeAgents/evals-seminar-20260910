@@ -1,6 +1,5 @@
 node_modules/
 .venv/
-uv.lock
 __pycache__/
 .deepeval/
 .deepeval_telemetry.txt
