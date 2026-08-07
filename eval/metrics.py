@@ -21,15 +21,15 @@ ASSESSMENT_QUESTIONS = [
 
 
 def build_metrics() -> list:
-    # 取得: 期待したツール(論文取得のexecuteとgenerate_pptx)が呼ばれたか
-    tool_correctness = ToolCorrectnessMetric()
-
     judge_model = OpenRouterModel(
         model="openai/gpt-5.4",
         api_key=os.environ["OPENROUTER_API_KEY"],
         base_url="https://openrouter.ai/api/v1",
         temperature=0,
     )
+
+    # 取得: 期待したツール(論文取得のexecuteとgenerate_pptx)が呼ばれたか
+    tool_correctness = ToolCorrectnessMetric(model=judge_model)
 
     # 要約: score = min(整合性, 網羅性)。input=論文本文, actual_output=スライドテキスト
     summarization = SummarizationMetric(
