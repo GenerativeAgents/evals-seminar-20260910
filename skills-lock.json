@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "skills": {
+    "wandb-autoresearch": {
+      "source": "wandb/skills",
+      "sourceType": "github",
+      "skillPath": "skills/wandb-autoresearch/SKILL.md",
+      "computedHash": "73a6d5e34eaea41a01b76ea4ff178756d201b401fd485b35a99c2ca38dceccf3"
+    },
+    "wandb-eval-tables": {
+      "source": "wandb/skills",
+      "sourceType": "github",
+      "skillPath": "skills/wandb-eval-tables/SKILL.md",
+      "computedHash": "5fbcf6c8193624961a4ce77c026e894ef4d991651807396a87275f4dcb2a26e3"
+    },
+    "wandb-primary": {
+      "source": "wandb/skills",
+      "sourceType": "github",
+      "skillPath": "skills/wandb-primary/SKILL.md",
+      "computedHash": "5fd0b60df1c0067dfd5306bc18c9196a94d733fabcd206c42741e9bf46b218e6"
+    }
+  }
+}
