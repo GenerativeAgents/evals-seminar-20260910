@@ -38,7 +38,7 @@ interface TraceOptions {
   agentName: string;
   model: string;
   variant: string;
-  entrypoint: "cli" | "ui";
+  entrypoint: "cli" | "ui" | "evaluation";
   attributes?: Record<string, string | number | boolean>;
 }
 

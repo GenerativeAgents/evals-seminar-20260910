@@ -7,7 +7,7 @@ import { useState } from "react";
 import { SlideProvider } from "./components/slide-context";
 import { SlidePreview } from "./components/slide-preview";
 import { ToolCallRenderer } from "./components/tool-call-renderer";
-import { VARIANTS, type Variant } from "./variants";
+import { VARIANTS, type Variant } from "../variants";
 
 export default function Home() {
   const [variant, setVariant] = useState<Variant>("baseline");

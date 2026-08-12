@@ -1,52 +1,59 @@
-"""ランナー成果物(results/)とar5iv本文からDeepEvalのテストケースを組み立てる。"""
+"""Dataset rows and DeepEval test cases for slide evaluations."""
 
 import html as html_lib
-import json
 import re
 import urllib.request
-from pathlib import Path
+from collections.abc import Iterable
 
 from deepeval.test_case import LLMTestCase, ToolCall
 
-ROOT = Path(__file__).resolve().parents[1]
-RESULTS_DIR = ROOT / "results"
-EXPECTED_TOOLS = [ToolCall(name="execute"), ToolCall(name="generate_pptx")]
+PAPER_IDS = ("1706.03762", "2512.07828", "2603.03303")
 MAX_SOURCE_CHARS = 120_000
+DEFAULT_EXPECTED_TOOLS = ("execute", "generate_pptx")
 
 
 def fetch_paper_text(arxiv_id: str) -> str:
-    """ar5ivから論文本文をテキスト化して取得する"""
+    """Fetch and normalize a fixed evaluation source from ar5iv."""
     url = f"https://ar5iv.labs.arxiv.org/html/{arxiv_id}"
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (sd36-eval)"})
     html = urllib.request.urlopen(req, timeout=90).read().decode("utf-8", "ignore")
-    # 数式はalttext(LaTeX)に置き換えて残す
     html = re.sub(
         r'(?is)<math[^>]*?alttext="([^"]*)"[^>]*>.*?</math>',
-        lambda m: f" {html_lib.unescape(m.group(1))} ",
+        lambda match: f" {html_lib.unescape(match.group(1))} ",
         html,
     )
     html = re.sub(r"(?is)<(script|style|math|nav|header|footer).*?</\1>", " ", html)
     text = re.sub(r"(?s)<[^>]+>", " ", html)
     text = re.sub(r"&[a-zA-Z#0-9]+;", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
-    # 参考文献以降は本文後半に出現した場合のみ打ち切る
-    refs = list(re.finditer(r"\bReferences\b", text))
-    if refs and refs[-1].start() > len(text) * 0.5:
-        text = text[: refs[-1].start()]
+    references = list(re.finditer(r"\bReferences\b", text))
+    if references and references[-1].start() > len(text) * 0.5:
+        text = text[: references[-1].start()]
     return text[:MAX_SOURCE_CHARS]
 
 
-def slides_to_text(data: dict) -> str:
-    """スライドJSONを評価用のプレーンテキストへ変換する。
+def build_dataset_rows() -> list[dict]:
+    """Fetch all rows before publishing, so a partial Dataset is never created."""
+    rows = []
+    for arxiv_id in PAPER_IDS:
+        rows.append(
+            {
+                "arxiv_id": arxiv_id,
+                "paper_url": f"https://arxiv.org/abs/{arxiv_id}",
+                "source_text": fetch_paper_text(arxiv_id),
+                "expected_tools": list(DEFAULT_EXPECTED_TOOLS),
+            }
+        )
+    return rows
 
-    タイトルスライドは著者・所属・発表年などの書誌メタデータであり、
-    要約の主張として判定させないため評価対象から除外する。
-    """
+
+def slides_to_text(data: dict) -> str:
+    """Convert slide JSON to the text representation used by DeepEval."""
     parts = [f"# {data['title']}"]
-    for i, slide in enumerate(data["slides"], 1):
+    for index, slide in enumerate(data["slides"], 1):
         if slide["type"] == "title":
             continue
-        parts.append(f"## Slide {i} [{slide['type']}] {slide.get('title', '')}")
+        parts.append(f"## Slide {index} [{slide['type']}] {slide.get('title', '')}")
         if slide.get("subtitle"):
             parts.append(slide["subtitle"])
         for bullet in slide.get("bullets") or []:
@@ -54,18 +61,27 @@ def slides_to_text(data: dict) -> str:
     return "\n".join(parts)
 
 
-def load_test_case(result_file: Path) -> LLMTestCase:
-    run = json.loads(result_file.read_text())
+def build_slide_test_case(
+    *,
+    output: dict,
+    source_text: str,
+    expected_tools: Iterable[str],
+) -> LLMTestCase:
+    """Build the common single-turn case consumed by all three metrics."""
+    slides_text = output.get("slides_text")
+    if not isinstance(slides_text, str) or not slides_text:
+        slides = output.get("slides")
+        if isinstance(slides, dict):
+            slides_text = slides_to_text(slides)
+    if not isinstance(slides_text, str) or not slides_text:
+        raise ValueError("Agent output does not contain evaluable slide text.")
+
+    tool_calls = output.get("tool_calls")
+    if not isinstance(tool_calls, list):
+        raise ValueError("Agent output tool_calls must be a list.")
     return LLMTestCase(
-        name=f"{run['variant']}-{run['arxivId']}",
-        input=fetch_paper_text(run["arxivId"]),
-        actual_output=slides_to_text(run["slides"]),
-        tools_called=[ToolCall(name=call["name"]) for call in run["toolCalls"]],
-        expected_tools=EXPECTED_TOOLS,
+        input=source_text,
+        actual_output=slides_text,
+        tools_called=[ToolCall(name=call["name"]) for call in tool_calls],
+        expected_tools=[ToolCall(name=name) for name in expected_tools],
     )
-
-
-def load_test_cases(variant: str, arxiv_id: str | None = None) -> list[LLMTestCase]:
-    pattern = f"{arxiv_id}.json" if arxiv_id else "*.json"
-    files = sorted((RESULTS_DIR / variant).glob(pattern))
-    return [load_test_case(file) for file in files]

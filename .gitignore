@@ -8,6 +8,10 @@ __pycache__/
 .deepeval/
 .deepeval_telemetry.txt
 
+# Ephemeral run workspaces and other local temporary files.
+tmp/*
+!tmp/.gitkeep
+
 # Workspace AGENTS.md files are part of the sample (root .gitignore hides AGENTS.md).
 !AGENTS.md
 
