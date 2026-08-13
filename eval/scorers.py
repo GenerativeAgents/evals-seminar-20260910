@@ -69,26 +69,38 @@ async def hallucination_free(output: dict, source_text: str) -> dict:
     )
 
 
+# 旧eval/metrics.pyのG-Eval evaluation_stepsをそのまま採点基準として使い、
+# DeepEvalのG-Evalテンプレート構造(steps + input + actual_output → 0〜10の
+# 整数score)に合わせる。logprobsによるスコア加重は行わない。
 SLIDE_QUALITY_PROMPT = """\
-あなたはプレゼン資料のレビュアーです。次のスライドを以下の基準で採点してください。
+あなたは評価者です。以下のEvaluation Stepsに基づいてActual Outputを採点してください。
 
-- 1枚のスライドに情報を詰め込みすぎていないか
-- 各スライドのタイトルが、そのスライドの主張を一文で表しているか
-- スライド全体の流れが論理的か
+# Evaluation Steps
+- actual_outputは論文から生成されたプレゼンスライドである。各スライドが1つのメッセージに絞られているかを確認し、1枚に複数の論点が詰め込まれていれば減点する
+- 箇条書きの密度を確認する。1スライドに5項目以上ある場合や、1項目が60字を超えて長い場合は「文字の壁」として減点する
+- スライドタイトルを確認する。「提案手法」「実験結果」のような章名だけのタイトルは減点し、そのスライドの主張を含む具体的なタイトルは加点する
+- 全体が背景と課題→提案手法→結果→結論の論理的な流れで並んでいるかを確認する
+- 省略自体は要約として許容する。内容の欠落よりも、詰め込み・冗長・曖昧なタイトルを重く扱う
 
-1(悪い)から5(良い)の整数の"score"と、判定理由の"reason"をJSONで返してください。
+# Input(論文本文)
+{source_text}
 
-# スライド
+# Actual Output(スライド)
 {slide_text}
+
+Evaluation Stepsに基づき、次の2つのキーを持つJSONだけを返してください。
+- "score": 0から10の整数。10はEvaluation Stepsの基準を完全に満たすことを、0はまったく満たさないことを意味する
+- "reason": 採点理由。Actual Outputの具体的な箇所に言及し、scoreの数値自体は引用しない
 """
 
 
 class SlideQualityScorer(weave.Scorer):
     judge_model: str
     prompt: str = SLIDE_QUALITY_PROMPT
+    threshold: float = 0.5
 
     @weave.op
-    async def score(self, output: dict) -> dict:
+    async def score(self, output: dict, source_text: str) -> dict:
         failed = _slide_text_missing_result(output)
         if failed is not None:
             return failed
@@ -97,13 +109,23 @@ class SlideQualityScorer(weave.Scorer):
             messages=[
                 {
                     "role": "user",
-                    "content": self.prompt.format(slide_text=output["slide_text"]),
+                    "content": self.prompt.format(
+                        source_text=source_text,
+                        slide_text=output["slide_text"],
+                    ),
                 }
             ],
+            temperature=0,
             response_format={"type": "json_object"},
         )
         verdict = json.loads(response.choices[0].message.content)
-        return {"score": verdict["score"], "reason": verdict["reason"]}
+        # 旧DeepEval G-Evalと同じ0〜1尺度へ正規化する
+        score = int(verdict["score"]) / 10
+        return {
+            "score": score,
+            "passed": score >= self.threshold,
+            "reason": verdict["reason"],
+        }
 
 
 def build_scorers() -> list:

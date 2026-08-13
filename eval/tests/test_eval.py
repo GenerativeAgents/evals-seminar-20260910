@@ -121,27 +121,47 @@ def _fake_completion_response(content: str):
     )
 
 
-async def test_slide_quality_scorer_extracts_score_and_reason(monkeypatch):
+async def test_slide_quality_scorer_normalizes_score_and_passes(monkeypatch):
     captured = {}
 
     async def fake_acompletion(**kwargs):
         captured.update(kwargs)
         return _fake_completion_response(
-            json.dumps({"score": 4, "reason": "流れが論理的"})
+            json.dumps({"score": 7, "reason": "流れが論理的"})
         )
 
     monkeypatch.setattr(scorers_module.litellm, "acompletion", fake_acompletion)
     scorer = SlideQualityScorer(judge_model=JUDGE_MODEL)
-    result = await scorer.score(output=SUCCESS_OUTPUT)
-    assert result == {"score": 4, "reason": "流れが論理的"}
+    result = await scorer.score(output=SUCCESS_OUTPUT, source_text="本文テキスト")
+    assert result == {"score": 0.7, "passed": True, "reason": "流れが論理的"}
     assert captured["model"] == JUDGE_MODEL
-    assert SUCCESS_OUTPUT["slide_text"] in captured["messages"][0]["content"]
+    assert captured["temperature"] == 0
+    prompt = captured["messages"][0]["content"]
+    assert SUCCESS_OUTPUT["slide_text"] in prompt
+    assert "本文テキスト" in prompt
+
+
+async def test_slide_quality_scorer_fails_below_threshold(monkeypatch):
+    async def fake_acompletion(**kwargs):
+        return _fake_completion_response(
+            json.dumps({"score": 4, "reason": "詰め込みが多い"})
+        )
+
+    monkeypatch.setattr(scorers_module.litellm, "acompletion", fake_acompletion)
+    scorer = SlideQualityScorer(judge_model=JUDGE_MODEL)
+    result = await scorer.score(output=SUCCESS_OUTPUT, source_text="本文テキスト")
+    assert result["score"] == 0.4
+    assert result["passed"] is False
 
 
 async def test_slide_quality_scorer_keeps_prompt_and_model_as_attributes():
     scorer = SlideQualityScorer(judge_model=JUDGE_MODEL)
     assert scorer.judge_model == JUDGE_MODEL
+    assert scorer.threshold == 0.5
     assert "{slide_text}" in scorer.prompt
+    assert "{source_text}" in scorer.prompt
+    # 旧metrics.pyのevaluation_stepsを引き継いだ具体基準を含むこと
+    assert "文字の壁" in scorer.prompt
 
 
 async def test_slide_quality_scorer_propagates_judge_error(monkeypatch):
@@ -151,7 +171,7 @@ async def test_slide_quality_scorer_propagates_judge_error(monkeypatch):
     monkeypatch.setattr(scorers_module.litellm, "acompletion", failing_acompletion)
     scorer = SlideQualityScorer(judge_model=JUDGE_MODEL)
     with pytest.raises(RuntimeError, match="judge API error"):
-        await scorer.score(output=SUCCESS_OUTPUT)
+        await scorer.score(output=SUCCESS_OUTPUT, source_text="本文テキスト")
 
 
 async def test_slide_quality_scorer_skips_judge_without_slide_text(monkeypatch):
@@ -160,7 +180,7 @@ async def test_slide_quality_scorer_skips_judge_without_slide_text(monkeypatch):
 
     monkeypatch.setattr(scorers_module.litellm, "acompletion", failing_acompletion)
     scorer = SlideQualityScorer(judge_model=JUDGE_MODEL)
-    result = await scorer.score(output=FAILED_OUTPUT)
+    result = await scorer.score(output=FAILED_OUTPUT, source_text="本文テキスト")
     assert result["passed"] is False
 
 
