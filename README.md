@@ -25,15 +25,15 @@ improvement-2   本文照合・一般化禁止・照合できない数値は書�
 
 - OpenRouter APIキー（エージェント実行: `deepseek/deepseek-v4-flash`、評価judge: `openai/gpt-5.4`）
 - W&B APIキーと自分のW&B entity（Weaveを主題とするため、本ハンズオンでは必須です）
-- [Visual Studio Code](docs/install-vscode.md)
+- [Visual Studio Code](docs/setup/install-vscode.md)
 - Node.jsと`uv`が使える実行環境（次の方法A・方法Bのどちらかでインストール）
 
 ### 方法A: Dev Containerを使う
 
 Visual Studio CodeのDev Containers拡張機能を使い、コンテナ内に開発環境を構築します。コンテナの起動時にNode.jsと`uv`が自動でインストールされます。
 
-1. [Dockerをインストールする](docs/install-docker.md)
-2. [Dev Containers拡張機能をインストールする](docs/install-devcontainer.md)
+1. [Dockerをインストールする](docs/setup/install-docker.md)
+2. [Dev Containers拡張機能をインストールする](docs/setup/install-devcontainer.md)
 
 ### 方法B: Node.jsとuvを直接インストールする
 
@@ -229,7 +229,9 @@ Model出力の`conversation_id`（`<variant>:<thread_id>`形式）は、Agents�
 │   ├── baseline/               # 手動実行(npm run agent)の成果物
 │   ├── improvement-1/
 │   └── improvement-2/
-├── docs/                       # ツールのインストール手順・実装方針
+├── docs/
+│   ├── setup/                  # ツールのインストール手順
+│   └── logs/                   # 取り組みごとの実装方針・計画の記録
 ├── package.json
 ├── pyproject.toml
 └── .env.sample

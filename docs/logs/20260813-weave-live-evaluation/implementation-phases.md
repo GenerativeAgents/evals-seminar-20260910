@@ -2,13 +2,13 @@
 
 ## 目的
 
-[weave-evaluation-implementation-plan.md](weave-evaluation-implementation-plan.md)の実装を、一度にすべて行うのではなく、独立して完結・検証できるフェーズへ分割する。各フェーズは次を満たす。
+[evaluation-implementation-plan.md](evaluation-implementation-plan.md)の実装を、一度にすべて行うのではなく、独立して完結・検証できるフェーズへ分割する。各フェーズは次を満たす。
 
 - そのフェーズ単独でコミットできる。
 - 完了時点で既存の機能（`npm run agent`、Web UI、現行のDeepEval評価）を壊さない。
 - フェーズごとに検証コマンドと完了条件を持つ。
 
-実装内容の詳細仕様は[weave-evaluation-implementation-plan.md](weave-evaluation-implementation-plan.md)を正とし、本書はその実装順序と区切りだけを定義する。
+実装内容の詳細仕様は[evaluation-implementation-plan.md](evaluation-implementation-plan.md)を正とし、本書はその実装順序と区切りだけを定義する。
 
 ## 決定事項
 

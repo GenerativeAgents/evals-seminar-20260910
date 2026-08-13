@@ -446,8 +446,8 @@ agent-run/
   runner.ts              # runSlideAgent()本体
   eval.ts                # 評価用JSON入出力エントリポイント
 
-docs/
-  weave-hands-on-plan.md
+docs/logs/20260813-weave-live-evaluation/
+  hands-on-plan.md
 ```
 
 ## 講師側の事前準備

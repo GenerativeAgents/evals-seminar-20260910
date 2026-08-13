@@ -402,8 +402,8 @@ pyproject.toml           # weave[scorers]とlitellmを追加、deepevalを削除
 tmp/
   .gitkeep               # run workspace親ディレクトリだけをGit管理
 
-docs/
-  weave-hands-on-plan.md # ライブEvaluation中心の教材構成
+docs/logs/20260813-weave-live-evaluation/
+  hands-on-plan.md       # ライブEvaluation中心の教材構成
 ```
 
 ファイル名は実装時に既存構成との整合性を見て調整してよいが、TypeScriptのエージェント実行、PythonのWeave Model、scorerの責務は分離する。
