@@ -38,8 +38,13 @@ interface TraceOptions {
   agentName: string;
   model: string;
   variant: string;
-  entrypoint: "cli" | "ui";
+  entrypoint: "cli" | "ui" | "eval";
   attributes?: Record<string, string | number | boolean>;
+}
+
+/** Evaluation行とAgent Traceを対応付ける共通のconversation ID形式。 */
+export function buildConversationId(variant: string, threadId: string): string {
+  return `${variant}:${threadId}`;
 }
 
 function toError(error: unknown): Error {
@@ -338,7 +343,7 @@ export function wrapAgentWithWeaveTracing<TAgent extends StreamableAgent>(
       const trace = weave.runIsolated(() => {
         const conversation = weave.startConversation({
           agentName: options.agentName,
-          conversationId: `${options.variant}:${threadId}`,
+          conversationId: buildConversationId(options.variant, threadId),
           model: options.model,
           attributes: {
             variant: options.variant,

@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "agent": "tsx agent-run/run.ts",
+    "agent": "tsx agent-run/cli.ts",
     "dev": "next dev",
     "check": "tsc --noEmit"
   },
