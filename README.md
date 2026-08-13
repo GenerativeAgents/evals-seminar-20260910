@@ -204,7 +204,7 @@ Model出力の`conversation_id`（`<variant>:<thread_id>`形式）は、Agents�
 │   ├── weave-agent-tracing.ts  # Agent Trace用ミドルウェアとラッパー
 │   └── weave-client.ts         # Weave初期化・flush
 ├── agent-run/
-│   ├── run.ts                  # 手動実行用CLI(薄いラッパー)
+│   ├── cli.ts                  # 手動実行用CLI(薄いラッパー)
 │   ├── runner.ts               # runSlideAgent()本体(2ターン実行と結果の捕捉)
 │   └── eval.ts                 # 評価用エントリポイント(evaluation-result.jsonを出力)
 ├── app/                        # 第32回から移植した対話UI(Next.js + CopilotKit)
