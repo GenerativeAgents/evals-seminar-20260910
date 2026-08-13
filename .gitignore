@@ -11,9 +11,12 @@ __pycache__/
 # Workspace AGENTS.md files are part of the sample (root .gitignore hides AGENTS.md).
 !AGENTS.md
 
-# Agent run byproducts inside workspaces. Evaluated artifacts live in results/.
+# Agent run byproducts inside workspaces.
 workspaces/*/slides/
 workspaces/*/large_tool_results/
+
+# Manual-run outputs (npm run agent). Recreated on demand; not read by evaluation.
+/results/
 
 # Run workspaces (kept after runs for inspection; only tmp/.gitkeep is tracked)
 tmp/*

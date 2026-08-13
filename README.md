@@ -134,7 +134,7 @@ npm run agent -- 1706.03762 improvement-2
 
 実行結果は `results/<variant>/<arXiv ID>.json` に保存されます。スライドJSON・実行中のツール呼び出し（サブエージェント内を含む）・所要時間が入っています。
 
-`results/` は手動実行の成果物置き場であり、後述のライブ評価はこのファイルを読みません。
+`results/` は手動実行の成果物置き場（Git管理外・実行時に自動生成）であり、後述のライブ評価はこのファイルを読みません。元リポジトリでの改善実験の出力は [docs/logs/20260813-archive-original-eval-results/](docs/logs/20260813-archive-original-eval-results/) にアーカイブしています。
 
 ヘッドレスランナーの2ターンも同じconversation IDでWeaveへ送信されます。プロセス終了前にOpenTelemetry spanをflushするため、短命なCLI実行でもトレースが欠落しないようにしています。
 
@@ -225,13 +225,10 @@ Model出力の`conversation_id`（`<variant>:<thread_id>`形式）は、Agents�
 │   ├── agent_model.py          # SlideAgentModelとsubprocess境界
 │   ├── run_eval.py             # weave.Evaluationの実行
 │   └── tests/test_eval.py      # 単体テスト
-├── results/
-│   ├── baseline/               # 手動実行(npm run agent)の成果物
-│   ├── improvement-1/
-│   └── improvement-2/
+├── results/                    # 手動実行(npm run agent)の成果物(Git管理外・実行時に自動生成)
 ├── docs/
 │   ├── setup/                  # ツールのインストール手順
-│   └── logs/                   # 取り組みごとの実装方針・計画の記録
+│   └── logs/                   # 取り組みごとの実装方針・計画の記録(元リポジトリの評価実験アーカイブを含む)
 ├── package.json
 ├── pyproject.toml
 └── .env.sample
