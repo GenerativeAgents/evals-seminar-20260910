@@ -14,3 +14,7 @@ __pycache__/
 # Agent run byproducts inside workspaces. Evaluated artifacts live in results/.
 workspaces/*/slides/
 workspaces/*/large_tool_results/
+
+# Run workspaces (kept after runs for inspection; only tmp/.gitkeep is tracked)
+tmp/*
+!tmp/.gitkeep

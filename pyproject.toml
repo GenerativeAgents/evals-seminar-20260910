@@ -1,9 +1,20 @@
 [project]
 name = "evals-seminar-20260910"
 version = "0.1.0"
-description = "DeepEval-based evaluation for the arXiv-paper slide-generation workflow"
+description = "Weave live evaluation for the arXiv-paper slide-generation workflow"
 requires-python = ">=3.12"
 dependencies = [
-    "deepeval==4.0.7",
+    "litellm>=1.80",
     "python-dotenv>=1.0",
+    "weave[scorers]==0.53.4",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=1.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["eval/tests"]
+asyncio_mode = "auto"
