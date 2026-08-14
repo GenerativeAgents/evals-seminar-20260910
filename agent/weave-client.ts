@@ -88,6 +88,74 @@ export interface PptxDownloadTraceEvent {
   downloadedAt: string;
 }
 
+export interface PresentationContentTraceEvent {
+  conversationId: string;
+  variant: string;
+  presentationTraceId: string;
+  contentTraceRef: string;
+  contentTraceUrl: string;
+  fileName: string;
+  fileSizeBytes: number;
+  slideCount: number;
+  tracedAt: string;
+}
+
+/** Link a rich-media presentation Call to the matching Agent Trace conversation. */
+export async function recordPresentationContentTrace(
+  event: PresentationContentTraceEvent,
+): Promise<boolean> {
+  if (!(await initWeaveAgentTrace())) {
+    return false;
+  }
+
+  weave.runIsolated(() => {
+    const attributes = {
+      variant: event.variant,
+      entrypoint: "ui",
+      event_type: "presentation_content_trace",
+      presentation_trace_id: event.presentationTraceId,
+      presentation_traced: true,
+      presentation_content_trace_ref: event.contentTraceRef,
+      presentation_content_trace_url: event.contentTraceUrl,
+      pptx_file_name: event.fileName,
+      pptx_file_size_bytes: event.fileSizeBytes,
+      pptx_slide_count: event.slideCount,
+      presentation_traced_at: event.tracedAt,
+    };
+    const conversation = weave.startConversation({
+      agentName: "slide-generator",
+      conversationId: event.conversationId,
+      attributes,
+    });
+    const turn = conversation.startTurn({
+      agentName: "slide-generator",
+    });
+    const toolCall = turn.startTool({
+      name: "trace_presentation",
+      args: JSON.stringify({
+        presentationTraceId: event.presentationTraceId,
+        fileName: event.fileName,
+        fileSizeBytes: event.fileSizeBytes,
+        slideCount: event.slideCount,
+      }),
+    });
+
+    toolCall.result = JSON.stringify({
+      success: true,
+      presentation_trace_id: event.presentationTraceId,
+      content_trace_ref: event.contentTraceRef,
+      content_trace_url: event.contentTraceUrl,
+      formats: ["pptx", "html"],
+    });
+    toolCall.end();
+    turn.end();
+    conversation.end();
+  });
+
+  await weave.flushOTel();
+  return true;
+}
+
 /** Append a PPTX download event to an existing Agent Trace conversation. */
 export async function recordPptxDownloadTrace(
   event: PptxDownloadTraceEvent,

@@ -105,6 +105,8 @@ http://localhost:3000 を開き、チャット欄にarXiv論文のURLを貼り�
 
 `WANDB_API_KEY`、`WANDB_ENTITY`、`WANDB_PROJECT`を設定すると、各ユーザー発言を1 Turnとして、モデル呼び出し・ツール呼び出し・SubAgent呼び出しが`${WANDB_ENTITY}/${WANDB_PROJECT}`のWeave Agents画面に記録されます。
 
+UIでスライドが生成されると、PPTX本体もWeaveの`trace_presentation` Callへ自動的に記録されます。CallにはWeave上で確認できるHTMLプレビューも付き、対応するAgent TraceにはCall参照が`trace_presentation`ツール結果として残ります。同じconversation内の同一スライドは1回だけ記録されるため、UIの再描画でCallが重複することはありません。PPTXのダウンロード操作は従来どおり同じconversation IDへ別イベントとして記録されます。
+
 ## エージェントの実行（ヘッドレスランナー）
 
 評価のためにヘッドレスランナーで同じワークフローを再現します。

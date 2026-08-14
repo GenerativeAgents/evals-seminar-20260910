@@ -90,7 +90,7 @@ export function createGeneratePptxTool(backend: BackendProtocolV2) {
     {
       name: "generate_pptx",
       description:
-        "スライドJSONファイルを読み込み、スキーマ検証してPowerPointファイル(.pptx)を生成する。スライドのアウトラインが確定した後に呼び出す。",
+        "承認済みスライドのUIプレビューとPowerPointファイル(.pptx)を生成する唯一のツール。アウトライン承認後、生成完了をユーザーへ報告する前に必ず一度だけ呼び出す。write_fileやexecuteでは代替できない。",
       schema: inputSchema,
     },
   );
