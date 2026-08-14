@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
     "@langchain/langgraph-checkpoint",
     "@langchain/openrouter",
     "langchain-copilotkit",
+    "weave",
   ],
 };
 

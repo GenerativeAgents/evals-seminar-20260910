@@ -24,6 +24,7 @@ improvement-2   本文照合・一般化禁止・照合できない数値は書�
 以下を準備してください。
 
 - OpenRouter APIキー（エージェント実行: `deepseek/deepseek-v4-flash`、評価judge: `openai/gpt-5.4`）
+- W&B APIキーとW&B entity（WeaveへAgent Traceを記録する場合）
 - [Visual Studio Code](docs/install-vscode.md)
 - Node.jsと`uv`が使える実行環境（次の方法A・方法Bのどちらかでインストール）
 
@@ -77,9 +78,15 @@ cp .env.sample .env
 
 ```env
 OPENROUTER_API_KEY=your_openrouter_api_key_here
+WANDB_API_KEY=your_wandb_api_key_here
+WANDB_ENTITY=your_wandb_entity_here
+WANDB_PROJECT=evals-seminar-20260910
 ```
 
 - `OPENROUTER_API_KEY`: エージェント実行と評価judgeの両方で使用（OpenRouter経由でdeepseek-v4-flashとopenai/gpt-5.4を呼び出す）
+- `WANDB_API_KEY`: WeaveへのAgent Trace送信に使用
+- `WANDB_ENTITY`: Weaveの記録先となるW&B entity
+- `WANDB_PROJECT`: Weaveの記録先となるW&B project
 
 ## UIの起動（対話アプリ）
 
@@ -95,6 +102,8 @@ http://localhost:3000 を開き、チャット欄にarXiv論文のURLを貼り�
 
 > [!NOTE]
 > 会話の状態はインメモリで保持されるため、devサーバを再起動すると過去の会話の続きからは再開できません。
+
+`WANDB_API_KEY`、`WANDB_ENTITY`、`WANDB_PROJECT`を設定すると、各ユーザー発言を1 Turnとして、モデル呼び出し・ツール呼び出し・SubAgent呼び出しが`${WANDB_ENTITY}/${WANDB_PROJECT}`のWeave Agents画面に記録されます。
 
 ## エージェントの実行（ヘッドレスランナー）
 
@@ -113,6 +122,8 @@ npm run agent -- 1706.03762 improvement-2
 
 実行結果は `results/<variant>/<arXiv ID>.json` に保存されます。
 スライドJSON・実行中のツール呼び出し（サブエージェント内を含む）・所要時間が入っており、評価はこのファイルだけを読みます。
+
+ヘッドレスランナーの2ターンも同じconversation IDでWeaveへ送信され、終了前にトレースをflushします。
 
 記事の実験で使ったデータセットは次の3本です。
 
@@ -184,6 +195,7 @@ npm run check
 ## 参考リンク
 
 - [DeepEval documentation](https://deepeval.com/docs/getting-started)
+- [W&B Weave Agent Trace](https://docs.wandb.ai/weave/guides/tracking/trace-agents)
 - [LangChain JS DeepAgents docs](https://docs.langchain.com/oss/javascript/deepagents/overview)
 - [OpenRouter DeepSeek V4 Flash](https://openrouter.ai/deepseek/deepseek-v4-flash)
 - [ar5iv](https://ar5iv.labs.arxiv.org/)

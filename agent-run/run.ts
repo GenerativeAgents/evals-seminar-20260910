@@ -4,6 +4,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadDotenv } from "dotenv";
 import { AGENT_MODEL, createSlideAgent } from "../agent/agent";
+import { wrapAgentWithWeaveTracing } from "../agent/weave-agent-tracing";
+import {
+  flushWeaveAgentTrace,
+  initWeaveAgentTrace,
+} from "../agent/weave-client";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 loadDotenv({ path: path.join(ROOT, ".env"), quiet: true });
@@ -17,7 +22,15 @@ if (!arxivId) {
 }
 
 const workspaceDir = path.join(ROOT, "workspaces", variant);
-const { agent, backend } = await createSlideAgent(workspaceDir);
+await initWeaveAgentTrace();
+const { agent: rawAgent, backend } = await createSlideAgent(workspaceDir);
+const agent = wrapAgentWithWeaveTracing(rawAgent, {
+  agentName: "slide-generator",
+  model: AGENT_MODEL,
+  variant,
+  entrypoint: "cli",
+  attributes: { arxiv_id: arxivId },
+});
 
 const config = {
   recursionLimit: 150,
@@ -59,40 +72,49 @@ async function runTurn(content: string): Promise<string> {
   return text;
 }
 
-const startedAtMs = Date.now();
+try {
+  const startedAtMs = Date.now();
 
-// ターン1: 論文URLを渡し、アウトライン提案まで進める
-const request = `https://arxiv.org/abs/${arxivId} この論文からスライドを作成してください。`;
-await runTurn(request);
+  // ターン1: 論文URLを渡し、アウトライン提案まで進める
+  const request = `https://arxiv.org/abs/${arxivId} この論文からスライドを作成してください。`;
+  await runTurn(request);
 
-// ターン2: 人間の確認を固定の承認メッセージで置き換え、generate_pptxまで進める
-const approval = "OKです。この構成でスライドを生成してください。";
-const finalText = await runTurn(approval);
+  // ターン2: 人間の確認を固定の承認メッセージで置き換え、generate_pptxまで進める
+  const approval = "OKです。この構成でスライドを生成してください。";
+  const finalText = await runTurn(approval);
 
-await backend.close();
+  const slides = JSON.parse(
+    fs.readFileSync(
+      path.join(workspaceDir, "slides", `${arxivId}.json`),
+      "utf-8",
+    ),
+  );
 
-const slides = JSON.parse(
-  fs.readFileSync(path.join(workspaceDir, "slides", `${arxivId}.json`), "utf-8"),
-);
-
-const resultFile = path.join(ROOT, "results", variant, `${arxivId}.json`);
-fs.mkdirSync(path.dirname(resultFile), { recursive: true });
-fs.writeFileSync(
-  resultFile,
-  `${JSON.stringify(
-    {
-      arxivId,
-      variant,
-      model: AGENT_MODEL,
-      messages: [request, approval],
-      toolCalls,
-      slides,
-      finalText,
-      durationMs: Date.now() - startedAtMs,
-      generatedAt: new Date().toISOString(),
-    },
-    null,
-    2,
-  )}\n`,
-);
-console.log(`\n[saved] results/${variant}/${arxivId}.json`);
+  const resultFile = path.join(ROOT, "results", variant, `${arxivId}.json`);
+  fs.mkdirSync(path.dirname(resultFile), { recursive: true });
+  fs.writeFileSync(
+    resultFile,
+    `${JSON.stringify(
+      {
+        arxivId,
+        variant,
+        model: AGENT_MODEL,
+        messages: [request, approval],
+        toolCalls,
+        slides,
+        finalText,
+        durationMs: Date.now() - startedAtMs,
+        generatedAt: new Date().toISOString(),
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  console.log(`\n[saved] results/${variant}/${arxivId}.json`);
+} finally {
+  try {
+    await backend.close();
+  } finally {
+    await flushWeaveAgentTrace();
+  }
+}
