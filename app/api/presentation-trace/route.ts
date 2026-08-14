@@ -1,12 +1,14 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { tracePresentationContent } from "../../../agent/presentation-content-tracer";
-import { recordPresentationContentTrace } from "../../../agent/weave-client";
+import {
+  getWeaveProjectPath,
+  recordPresentationContentTrace,
+} from "../../../agent/weave-client";
 import { VARIANTS } from "../../variants";
 
 const MAX_PPTX_BASE64_LENGTH = 32 * 1024 * 1024;
 const WANDB_API_KEY_PLACEHOLDER = "your_wandb_api_key_here";
-const WANDB_ENTITY_PLACEHOLDER = "your_wandb_entity_here";
 
 interface PresentationTraceResponse {
   traced: true;
@@ -48,14 +50,6 @@ const presentationTraceSchema = z.object({
     slides: z.array(slideSchema),
   }),
 });
-
-function getWeaveProjectPath(): string | undefined {
-  const entity = process.env.WANDB_ENTITY?.trim();
-  const project = process.env.WANDB_PROJECT?.trim();
-  return entity && entity !== WANDB_ENTITY_PLACEHOLDER && project
-    ? `${entity}/${project}`
-    : undefined;
-}
 
 export async function POST(request: Request) {
   let body: unknown;

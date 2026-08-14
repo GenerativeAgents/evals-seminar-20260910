@@ -1,5 +1,6 @@
 import * as weave from "weave";
 
+const DEFAULT_WEAVE_PROJECT = "evals-seminar-20260910";
 const WANDB_API_KEY_PLACEHOLDER = "your_wandb_api_key_here";
 const WANDB_ENTITY_PLACEHOLDER = "your_wandb_entity_here";
 
@@ -16,19 +17,17 @@ function hasConfiguredApiKey(): boolean {
   return Boolean(apiKey && apiKey !== WANDB_API_KEY_PLACEHOLDER);
 }
 
-function getWeaveProjectPath(): string | undefined {
+export function getWeaveProjectPath(): string | undefined {
   const entity = process.env.WANDB_ENTITY?.trim();
-  const project = process.env.WANDB_PROJECT?.trim();
-  if (
-    !entity ||
-    entity === WANDB_ENTITY_PLACEHOLDER ||
-    !project
-  ) {
-    return undefined;
+  const project =
+    process.env.WANDB_PROJECT?.trim() || DEFAULT_WEAVE_PROJECT;
+  if (entity && entity !== WANDB_ENTITY_PLACEHOLDER) {
+    return `${entity}/${project}`;
   }
-  return `${entity}/${project}`;
-}
 
+  // Backward compatibility for environments configured from origin/main.
+  return process.env.WEAVE_PROJECT?.trim() || undefined;
+}
 /** Initialize Weave once per process. Returns false when tracing is disabled. */
 export async function initWeaveAgentTrace(): Promise<boolean> {
   if (!hasConfiguredApiKey()) {
@@ -45,7 +44,7 @@ export async function initWeaveAgentTrace(): Promise<boolean> {
   if (!projectPath) {
     if (!weaveGlobal.__evalsSeminarWeaveDisabledNoticeShown) {
       console.warn(
-        "[weave] WANDB_ENTITY and WANDB_PROJECT must be configured; Agent Trace is disabled.",
+        "[weave] WANDB_ENTITY (and optionally WANDB_PROJECT) or WEAVE_PROJECT must be configured; Agent Trace is disabled.",
       );
       weaveGlobal.__evalsSeminarWeaveDisabledNoticeShown = true;
     }
@@ -210,7 +209,6 @@ export async function recordPptxDownloadTrace(
   await weave.flushOTel();
   return true;
 }
-
 /** Flush Agent Trace's OpenTelemetry exporter before a short-lived process exits. */
 export async function flushWeaveAgentTrace(): Promise<void> {
   const initialized = await weaveGlobal.__evalsSeminarWeaveInitPromise;

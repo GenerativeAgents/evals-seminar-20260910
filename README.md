@@ -1,21 +1,21 @@
 # AI Agent評価体系構築セミナー ハンズオン（2026/9/10）
 
-「arXiv論文→スライド生成」ワークフローを題材に、DeepEvalのメトリクスで「計測→改善→再計測」のループを回すサンプルです。
+「arXiv論文→スライド生成」ワークフローを題材に、W&B Weaveのライブ評価で「計測→改善→再計測」のループを回すサンプルです。
 
 Software Design誌「実践LLMアプリケーション開発」の[第32回](https://github.com/mahm/softwaredesign-llm-application/tree/main/32)（エージェント本体と対話UI）および[第36回](https://github.com/mahm/softwaredesign-llm-application/tree/main/36)（評価）のサンプルコードをセミナー用に再構成しています。
 
 > [!NOTE]
 > 元のサンプルコードはNode.jsとBunを使用していますが、本リポジトリは受講者がインストールするツールを減らすため、Node.jsのみで動くように変更しています。
 
-エージェント本体はTypeScript（deepagents）、評価はPython（DeepEval）で実装しています。
+エージェント本体はTypeScript（deepagents）、評価はPython（W&B Weave）で実装しています。
 
 3つのスキルの作り込み段階を持ち、各改善を直前の段階における改善と比較します。
 
 ```
 baseline        スキルはワークフローの機構のみ(取得手順・JSON形式・枚数・確認フロー)
-  ↓ +スライド設計ガイド                → G-Eval(見せ方)で比較
+  ↓ +スライド設計ガイド                → 主にSlide Qualityで比較
 improvement-1   詰め込み禁止・主張型タイトル・論理的な流れ
-  ↓ +保存前の事実確認                  → Summarization(忠実性×網羅)で比較
+  ↓ +保存前の事実確認                  → 主にHallucination Free(本文への忠実性)で比較
 improvement-2   本文照合・一般化禁止・照合できない数値は書かない
 ```
 
@@ -24,16 +24,16 @@ improvement-2   本文照合・一般化禁止・照合できない数値は書�
 以下を準備してください。
 
 - OpenRouter APIキー（エージェント実行: `deepseek/deepseek-v4-flash`、評価judge: `openai/gpt-5.4`）
-- W&B APIキーとW&B entity（WeaveへAgent Traceを記録する場合）
-- [Visual Studio Code](docs/install-vscode.md)
+- W&B APIキーと自分のW&B entity（Weaveを主題とするため、本ハンズオンでは必須です）
+- [Visual Studio Code](docs/setup/install-vscode.md)
 - Node.jsと`uv`が使える実行環境（次の方法A・方法Bのどちらかでインストール）
 
 ### 方法A: Dev Containerを使う
 
 Visual Studio CodeのDev Containers拡張機能を使い、コンテナ内に開発環境を構築します。コンテナの起動時にNode.jsと`uv`が自動でインストールされます。
 
-1. [Dockerをインストールする](docs/install-docker.md)
-2. [Dev Containers拡張機能をインストールする](docs/install-devcontainer.md)
+1. [Dockerをインストールする](docs/setup/install-docker.md)
+2. [Dev Containers拡張機能をインストールする](docs/setup/install-devcontainer.md)
 
 ### 方法B: Node.jsとuvを直接インストールする
 
@@ -74,7 +74,7 @@ uv sync
 cp .env.sample .env
 ```
 
-作成した `.env` を開き、`your_openrouter_api_key_here` の部分を自分のOpenRouter APIキーに書き換えます。
+作成した `.env` を開き、各値を自分のキーに書き換えます。
 
 ```env
 OPENROUTER_API_KEY=your_openrouter_api_key_here
@@ -84,9 +84,23 @@ WANDB_PROJECT=evals-seminar-20260910
 ```
 
 - `OPENROUTER_API_KEY`: エージェント実行と評価judgeの両方で使用（OpenRouter経由でdeepseek-v4-flashとopenai/gpt-5.4を呼び出す）
-- `WANDB_API_KEY`: WeaveへのAgent Trace送信に使用
-- `WANDB_ENTITY`: Weaveの記録先となるW&B entity
-- `WANDB_PROJECT`: Weaveの記録先となるW&B project
+- `WANDB_API_KEY`: WeaveへのAgent Trace送信と評価の記録に使用
+- `WANDB_ENTITY`: Dataset・Evaluation・Traceの記録先となるW&B entity
+- `WANDB_PROJECT`: Dataset・Evaluation・Traceの記録先となるW&B project（省略時は `evals-seminar-20260910`）
+
+既存環境との互換性のため、`WEAVE_PROJECT=<entity>/<project>` 形式も利用できます。`WANDB_ENTITY` が設定されている場合は、`WANDB_ENTITY` と `WANDB_PROJECT` が優先されます。
+
+## ワークスペースの構成
+
+`workspaces/<variant>/` は設定（`AGENTS.md`）とスキル（`.agent/skills/`）を保持する読み取り専用のworkspace templateです。CLI・Web UI・評価はいずれもtemplateを直接使わず、実行時に `tmp/workspaces/<yyyyMMddHHmmss>-<variant>-<runId>/` へrun workspaceを作成して、その中で動作します。
+
+| 実行経路         | run workspaceの分離単位 |
+| ---------------- | ----------------------- |
+| 手動CLI          | コマンド実行ごと        |
+| Web UI           | conversationごと        |
+| Weave Evaluation | Dataset行の実行ごと     |
+
+これにより、並列実行や再実行でファイルが競合したり、過去の生成物を誤って読むことがありません。run workspaceは実行後も調査用に残り、自動削除されません（`tmp/`配下はGit管理外です。不要になったら手動で削除してください）。
 
 ## UIの起動（対話アプリ）
 
@@ -100,16 +114,18 @@ http://localhost:3000 を開き、チャット欄にarXiv論文のURLを貼り�
 
 ヘッダーの「ワークスペース」で `baseline` / `improvement-1` / `improvement-2` を切り替えられ、スキルの作り込み段階による挙動の違いを対話で見比べられます。切り替えると会話はリセットされます。
 
+会話ごとに独立したrun workspaceが作られ、同じ会話の複数ターンでは同じrun workspaceを再利用します。
+
 > [!NOTE]
 > 会話の状態はインメモリで保持されるため、devサーバを再起動すると過去の会話の続きからは再開できません。
 
-`WANDB_API_KEY`、`WANDB_ENTITY`、`WANDB_PROJECT`を設定すると、各ユーザー発言を1 Turnとして、モデル呼び出し・ツール呼び出し・SubAgent呼び出しが`${WANDB_ENTITY}/${WANDB_PROJECT}`のWeave Agents画面に記録されます。
+`WANDB_API_KEY`、`WANDB_ENTITY`、`WANDB_PROJECT`を設定すると、各ユーザー発言を1 Turnとして、モデル呼び出し・ツール呼び出し・SubAgent呼び出しが`${WANDB_ENTITY}/${WANDB_PROJECT}`のWeave Agents画面に記録されます。SubAgentは呼び出し全体のみを記録し、その内部のモデル・ツール呼び出しは記録しません。
 
 UIでスライドが生成されると、PPTX本体もWeaveの`trace_presentation` Callへ自動的に記録されます。CallにはWeave上で確認できるHTMLプレビューも付き、対応するAgent TraceにはCall参照が`trace_presentation`ツール結果として残ります。同じconversation内の同一スライドは1回だけ記録されるため、UIの再描画でCallが重複することはありません。PPTXのダウンロード操作は従来どおり同じconversation IDへ別イベントとして記録されます。
 
 ## エージェントの実行（ヘッドレスランナー）
 
-評価のためにヘッドレスランナーで同じワークフローを再現します。
+ヘッドレスランナーで同じワークフローをコマンドラインから再現します。
 
 一度のコマンド実行で、以下の2つの会話ターンが自動で実行されます。
 
@@ -122,20 +138,11 @@ npm run agent -- 1706.03762 improvement-1
 npm run agent -- 1706.03762 improvement-2
 ```
 
-実行結果は `results/<variant>/<arXiv ID>.json` に保存されます。
-スライドJSON・実行中のツール呼び出し（サブエージェント内を含む）・所要時間が入っており、評価はこのファイルだけを読みます。
+実行結果は `results/<variant>/<arXiv ID>.json` に保存されます。スライドJSON・実行中のツール呼び出し（サブエージェント内を含む）・所要時間が入っています。
 
-ヘッドレスランナーの2ターンも同じconversation IDでWeaveへ送信され、終了前にトレースをflushします。
+`results/` は手動実行の成果物置き場（Git管理外・実行時に自動生成）であり、後述のライブ評価はこのファイルを読みません。元リポジトリでの改善実験の出力は [docs/logs/20260813-archive-original-eval-results/](docs/logs/20260813-archive-original-eval-results/) にアーカイブしています。
 
-記事の実験で使ったデータセットは次の3本です。
-
-```bash
-for id in 1706.03762 2512.07828 2603.03303; do
-  npm run agent -- "$id" baseline
-  npm run agent -- "$id" improvement-1
-  npm run agent -- "$id" improvement-2
-done
-```
+ヘッドレスランナーの2ターンも同じconversation IDでWeaveへ送信されます。プロセス終了前にOpenTelemetry spanをflushするため、短命なCLI実行でもトレースが欠落しないようにしています。
 
 ### 使用論文
 
@@ -143,16 +150,53 @@ done
 - Jeremy Yang, Noah Yonack, Kate Zyskowski, Denis Yarats, Johnny Ho, Jerry Ma. "The Adoption and Usage of AI Agents: Early Evidence from Perplexity." 2025. [arXiv:2512.07828](https://arxiv.org/abs/2512.07828)
 - Shirley Wu, Evelyn Choi, Arpandeep Khatua, Zhanghan Wang, Joy He-Yueya, Tharindu Cyril Weerasooriya, Wei Wei, Diyi Yang, Jure Leskovec, James Zou. "HumanLM: Simulating Users with State Alignment Beats Response Imitation." 2026. [arXiv:2603.03303](https://arxiv.org/abs/2603.03303)
 
-## 評価の実行
+## 評価の実行（Weaveライブ評価）
+
+評価はWeaveの`Evaluation`によるライブ評価です。Datasetの各行についてTypeScriptエージェントをその場で実行し、出力をscorerで採点します。評価結果の正本はWeaveであり、ローカルJSONが必要な場合はEvaluation完了後にWeave Evaluation APIからエクスポートします（評価入力としては使用しません）。
+
+### 1. Datasetのpublish（初回のみ）
+
+3本の論文（上記「使用論文」）を、自分のprojectへWeave Datasetとしてpublishします。
 
 ```bash
-uv run eval/run_eval.py baseline --repeat 3
-uv run eval/run_eval.py improvement-1 --repeat 3
-uv run eval/run_eval.py improvement-2 --repeat 3
+uv run eval/publish_dataset.py
 ```
 
-スコアと理由は `results/eval/<variant>.json` に保存されます。
-`--repeat` はjudgeのブレを見るための繰り返し実行です。単発のスコアではなく複数回の平均で比較してください。
+行データはリポジトリで固定されており、`source_text`（judgeが参照する評価基準の論文本文）はpublish時にar5ivから取得してDataset versionへ保存されます。Weaveのオブジェクトはcontent-addressedのため、同じ内容の再publishは新しいversionを作らず、Datasetのversion（digest）は参加者全員で一致します。
+
+### 2. ライブ評価
+
+```bash
+uv run eval/run_eval.py baseline
+```
+
+publish済みのDatasetをrefで取得し、3論文それぞれについてエージェントを実行して採点します。各Dataset行の実行は1回で、反復回数のオプションはありません。
+
+品質軸は次の4つです。
+
+| 品質軸             | scorer                | 実装                                     |
+| ------------------ | --------------------- | ---------------------------------------- |
+| Tool Correctness   | `tool_correctness`    | 自作function-based scorer（決定的判定）  |
+| Summarization      | `summarization`       | プリセット`SummarizationScorer`への移譲  |
+| Hallucination Free | `hallucination_free`  | プリセット`HallucinationFreeScorer`への移譲 |
+| Slide Quality      | `SlideQualityScorer`  | 自作class-based scorer（LLM-as-a-judge） |
+
+scorerは数値だけでなく判定理由も返し、Weave上でDataset・Model・scorerのバージョンとともに記録されます。judgeはlitellm経由の`openrouter/openai/gpt-5.4`です。
+
+### 3. variantの比較（Compare evaluations）
+
+時間と予算に余裕がある場合は、残りのvariantも同じコマンドで評価します。
+
+```bash
+uv run eval/run_eval.py improvement-1
+uv run eval/run_eval.py improvement-2
+```
+
+同じDataset version refと同じscorerバージョンで実行されるため、WeaveのEvals画面で複数のEvaluationを選択してCompareを開くと、variant間で品質軸ごとの変化を行単位まで比較できます。
+
+### 4. Evaluation行からAgent Traceを調査する
+
+Model出力の`conversation_id`（`<variant>:<thread_id>`形式）は、Agents画面のconversation IDと対応しています。スコアが低い行や回帰した行を見つけたら、`conversation_id`でAgents画面のTraceを開き、モデル呼び出し・ツール呼び出し・SubAgent呼び出しから原因を調査してください。
 
 ## ファイル構成
 
@@ -161,28 +205,36 @@ uv run eval/run_eval.py improvement-2 --repeat 3
 ├── agent/                      # 第32回から流用したエージェント本体
 │   ├── agent.ts                # createDeepAgent定義(モデルはOpenRouter経由に変更)
 │   ├── generate-pptx-tool.ts   # generate_pptxツール(スキーマ検証内蔵)
-│   └── system-prompt.ts        # システムプロンプト
+│   ├── run-workspace.ts        # templateからrun workspaceを作成する共通処理
+│   ├── system-prompt.ts        # システムプロンプト
+│   ├── weave-agent-tracing.ts  # Agent Trace用ミドルウェアとラッパー
+│   └── weave-client.ts         # Weave初期化・flush
 ├── agent-run/
-│   └── run.ts                  # ヘッドレスランナー
+│   ├── cli.ts                  # 手動実行用CLI(薄いラッパー)
+│   ├── runner.ts               # runSlideAgent()本体(2ターン実行と結果の捕捉)
+│   └── eval.ts                 # 評価用エントリポイント(evaluation-result.jsonを出力)
 ├── app/                        # 第32回から移植した対話UI(Next.js + CopilotKit)
-│   ├── api/copilotkit/route.ts # CopilotKitランタイム(3ワークスペース分のエージェントを公開)
+│   ├── api/copilotkit/route.ts # CopilotKitランタイム(conversation単位のagent管理)
 │   ├── components/             # スライドプレビュー・ツール呼び出し表示
 │   ├── page.tsx                # 画面本体(ワークスペース切り替え付き)
 │   └── variants.ts             # ワークスペース一覧の共有定数
-├── workspaces/
+├── workspaces/                 # 読み取り専用のworkspace template
 │   ├── baseline/               # 機構のみのスキル
 │   ├── improvement-1/          # +スライド設計ガイド
 │   └── improvement-2/          # +保存前の事実確認
+├── tmp/
+│   └── workspaces/             # 実行時に作られるrun workspace(Git管理外)
 ├── eval/
-│   ├── cases.py                # results/*.json + ar5iv本文 → LLMTestCase
-│   ├── metrics.py              # 搭載済みメトリクスの組み立て
-│   └── run_eval.py             # evaluate() 実行・スコア保存
-├── results/
-│   ├── baseline/               # ランナー成果物
-│   ├── improvement-1/
-│   ├── improvement-2/
-│   └── eval/                   # 評価スコアと理由
-├── docs/                       # ツールのインストール手順
+│   ├── dataset.py              # Dataset行の組み立てと環境変数検証
+│   ├── publish_dataset.py      # 自分のprojectへDatasetをpublish
+│   ├── scorers.py              # 4つの品質軸のscorer
+│   ├── agent_model.py          # SlideAgentModelとsubprocess境界
+│   ├── run_eval.py             # weave.Evaluationの実行
+│   └── tests/test_eval.py      # 単体テスト
+├── results/                    # 手動実行(npm run agent)の成果物(Git管理外・実行時に自動生成)
+├── docs/
+│   ├── setup/                  # ツールのインストール手順
+│   └── logs/                   # 取り組みごとの実装方針・計画の記録(元リポジトリの評価実験アーカイブを含む)
 ├── package.json
 ├── pyproject.toml
 └── .env.sample
@@ -192,11 +244,16 @@ uv run eval/run_eval.py improvement-2 --repeat 3
 
 ```bash
 npm run check
+uv run pytest
 ```
 
 ## 参考リンク
 
-- [DeepEval documentation](https://deepeval.com/docs/getting-started)
+- [Weave Evaluations overview](https://docs.wandb.ai/weave/guides/core-types/evaluations)
+- [Weave Scoring overview](https://docs.wandb.ai/weave/guides/evaluation/scorers)
+- [Weave Predefined scorers](https://docs.wandb.ai/weave/guides/evaluation/builtin_scorers)
+- [Weave Datasets](https://docs.wandb.ai/weave/guides/core-types/datasets)
+- [Weave Compare evaluations](https://docs.wandb.ai/weave/guides/evaluation/compare_evals)
 - [W&B Weave Agent Trace](https://docs.wandb.ai/weave/guides/tracking/trace-agents)
 - [LangChain JS DeepAgents docs](https://docs.langchain.com/oss/javascript/deepagents/overview)
 - [OpenRouter DeepSeek V4 Flash](https://openrouter.ai/deepseek/deepseek-v4-flash)

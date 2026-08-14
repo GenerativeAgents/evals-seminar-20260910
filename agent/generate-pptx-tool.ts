@@ -35,7 +35,13 @@ export function createGeneratePptxTool(backend: BackendProtocolV2) {
           action: "filePath引数にスライドJSONファイルのパスを渡してください。",
         });
       }
-      const readResult = await backend.readRaw(filePath);
+      // readRawは存在しないパスで例外を投げることがあるため、構造化エラーへ合流させる
+      let readResult: Awaited<ReturnType<BackendProtocolV2["readRaw"]>>;
+      try {
+        readResult = await backend.readRaw(filePath);
+      } catch {
+        readResult = { error: "file_not_found" } as typeof readResult;
+      }
       const content = readResult.data?.content;
       if (readResult.error || content === undefined) {
         return JSON.stringify({
