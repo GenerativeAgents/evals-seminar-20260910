@@ -1,6 +1,10 @@
 "use client";
 
-import { CopilotKit, useCopilotChat } from "@copilotkit/react-core";
+import {
+  CopilotKit,
+  useCopilotChat,
+  useThreads,
+} from "@copilotkit/react-core";
 import { CopilotChat } from "@copilotkit/react-ui";
 import "@copilotkit/react-ui/styles.css";
 import { useState } from "react";
@@ -28,6 +32,7 @@ function Workbench({
   onVariantChange: (variant: Variant) => void;
 }) {
   const { isLoading } = useCopilotChat();
+  const { threadId } = useThreads();
 
   return (
     <SlideProvider>
@@ -70,7 +75,7 @@ function Workbench({
             )}
           </header>
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <ToolCallRenderer />
+            <ToolCallRenderer variant={variant} threadId={threadId} />
             <CopilotChat
               labels={{
                 title: "Slide Agent",

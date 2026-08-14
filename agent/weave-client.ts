@@ -78,6 +78,71 @@ export function isWeaveAgentTraceActive(): boolean {
   return weaveGlobal.__evalsSeminarWeaveActive === true;
 }
 
+export interface PptxDownloadTraceEvent {
+  conversationId: string;
+  variant: string;
+  downloadEventId: string;
+  fileName: string;
+  fileSizeBytes: number;
+  slideCount: number;
+  downloadedAt: string;
+}
+
+/** Append a PPTX download event to an existing Agent Trace conversation. */
+export async function recordPptxDownloadTrace(
+  event: PptxDownloadTraceEvent,
+): Promise<boolean> {
+  if (!(await initWeaveAgentTrace())) {
+    return false;
+  }
+
+  weave.runIsolated(() => {
+    const attributes = {
+      variant: event.variant,
+      entrypoint: "ui",
+      event_type: "pptx_download",
+      pptx_downloaded: true,
+      download_status: "initiated",
+      download_event_id: event.downloadEventId,
+      pptx_file_name: event.fileName,
+      pptx_file_size_bytes: event.fileSizeBytes,
+      pptx_slide_count: event.slideCount,
+      pptx_downloaded_at: event.downloadedAt,
+    };
+    const conversation = weave.startConversation({
+      agentName: "slide-generator",
+      conversationId: event.conversationId,
+      attributes,
+    });
+    const turn = conversation.startTurn({
+      agentName: "slide-generator",
+    });
+    const toolCall = turn.startTool({
+      name: "download_pptx",
+      args: JSON.stringify({
+        fileName: event.fileName,
+        fileSizeBytes: event.fileSizeBytes,
+        slideCount: event.slideCount,
+      }),
+      toolCallId: event.downloadEventId,
+    });
+
+    toolCall.result = JSON.stringify({
+      success: true,
+      pptx_downloaded: true,
+      download_status: "initiated",
+      downloaded_at: event.downloadedAt,
+    });
+    toolCall.end();
+    turn.end();
+    conversation.end();
+  });
+
+  // The route should only acknowledge the event after it has reached Weave.
+  await weave.flushOTel();
+  return true;
+}
+
 /** Flush Agent Trace's OpenTelemetry exporter before a short-lived process exits. */
 export async function flushWeaveAgentTrace(): Promise<void> {
   const initialized = await weaveGlobal.__evalsSeminarWeaveInitPromise;
