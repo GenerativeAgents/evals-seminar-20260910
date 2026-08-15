@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import agent_model
 import dataset as dataset_module
+import run_eval as run_eval_module
 import scorers as scorers_module
 from agent_model import run_agent_process
 from dataset import build_dataset_rows
@@ -184,6 +185,53 @@ async def test_slide_quality_scorer_skips_judge_without_slide_text(monkeypatch):
     assert result["passed"] is False
 
 
+class FakeLoggedScore:
+    def __init__(self):
+        self.value = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        return False
+
+
+class FakePrediction:
+    def __init__(self):
+        self.scorer_name = None
+        self.logged_score = None
+
+    def log_score(self, scorer_name):
+        self.scorer_name = scorer_name
+        self.logged_score = FakeLoggedScore()
+        return self.logged_score
+
+
+async def test_apply_and_log_scorer_binds_class_scorer_self(monkeypatch):
+    async def fake_acompletion(**kwargs):
+        return _fake_completion_response(
+            json.dumps({"score": 8, "reason": "主張が明確"})
+        )
+
+    monkeypatch.setattr(scorers_module.litellm, "acompletion", fake_acompletion)
+    prediction = FakePrediction()
+    scorer = SlideQualityScorer(judge_model=JUDGE_MODEL)
+
+    await run_eval_module.apply_and_log_scorer(
+        prediction=prediction,
+        scorer=scorer,
+        example={"source_text": "本文テキスト"},
+        output=SUCCESS_OUTPUT,
+    )
+
+    assert prediction.scorer_name == "SlideQualityScorer"
+    assert prediction.logged_score.value == {
+        "score": 0.8,
+        "passed": True,
+        "reason": "主張が明確",
+    }
+
+
 # ---------------------------------------------------------------------------
 # run_agent_process
 # ---------------------------------------------------------------------------
@@ -197,6 +245,34 @@ VALID_RESULT = {
     "duration_ms": 123,
     "conversation_id": "baseline:abc",
 }
+
+EVAL_CONTEXT = {
+    "weave.eval.run_id": "eval-call-id",
+    "weave.eval.predict_and_score_call_id": "predict-and-score-call-id",
+    "weave.eval.kind": "agent",
+    "weave.eval.example_id": "1706.03762",
+    "weave.eval.trial_index": 0,
+}
+
+
+def test_build_eval_context_uses_evaluation_call_ids():
+    prediction = SimpleNamespace(
+        evaluate_call=SimpleNamespace(id="eval-call-id"),
+        predict_and_score_call=SimpleNamespace(id="predict-and-score-call-id"),
+    )
+    context = run_eval_module.build_eval_context(
+        prediction,
+        example_id="1706.03762",
+        evaluation_name="baseline",
+    )
+    assert context == {
+        "weave.eval.run_id": "eval-call-id",
+        "weave.eval.predict_and_score_call_id": "predict-and-score-call-id",
+        "weave.eval.kind": "agent",
+        "weave.eval.example_id": "1706.03762",
+        "weave.eval.trial_index": 0,
+        "weave.eval.evaluation_name": "baseline",
+    }
 
 
 class FakeProcess:
@@ -249,15 +325,34 @@ async def test_run_agent_process_reads_result(monkeypatch, tmp_path):
         variant="baseline",
         arxiv_id="1706.03762",
         paper_url="https://arxiv.org/abs/1706.03762",
+        eval_context=EVAL_CONTEXT,
     )
     assert result == VALID_RESULT
+
+
+async def test_run_agent_process_forwards_eval_context(monkeypatch, tmp_path):
+    started = _install_fake_subprocess(
+        monkeypatch,
+        tmp_path,
+        on_start=lambda base, args: _write_result(base, args, VALID_RESULT),
+    )
+    await run_agent_process(
+        variant="baseline",
+        arxiv_id="1706.03762",
+        paper_url="https://arxiv.org/abs/1706.03762",
+        eval_context=EVAL_CONTEXT,
+    )
+    assert json.loads(started["--eval-context"]) == EVAL_CONTEXT
 
 
 async def test_run_agent_process_raises_on_nonzero_exit(monkeypatch, tmp_path):
     _install_fake_subprocess(monkeypatch, tmp_path, returncode=1)
     with pytest.raises(RuntimeError, match="exit code 1"):
         await run_agent_process(
-            variant="baseline", arxiv_id="x", paper_url="https://example.com"
+            variant="baseline",
+            arxiv_id="x",
+            paper_url="https://example.com",
+            eval_context=EVAL_CONTEXT,
         )
 
 
@@ -267,7 +362,10 @@ async def test_run_agent_process_raises_when_workspace_missing(
     _install_fake_subprocess(monkeypatch, tmp_path)
     with pytest.raises(RuntimeError, match="0件"):
         await run_agent_process(
-            variant="baseline", arxiv_id="x", paper_url="https://example.com"
+            variant="baseline",
+            arxiv_id="x",
+            paper_url="https://example.com",
+            eval_context=EVAL_CONTEXT,
         )
 
 
@@ -281,7 +379,10 @@ async def test_run_agent_process_raises_on_multiple_workspaces(
     _install_fake_subprocess(monkeypatch, tmp_path, on_start=create_two)
     with pytest.raises(RuntimeError, match="2件"):
         await run_agent_process(
-            variant="baseline", arxiv_id="x", paper_url="https://example.com"
+            variant="baseline",
+            arxiv_id="x",
+            paper_url="https://example.com",
+            eval_context=EVAL_CONTEXT,
         )
 
 
@@ -294,7 +395,10 @@ async def test_run_agent_process_raises_on_missing_keys(monkeypatch, tmp_path):
     )
     with pytest.raises(RuntimeError, match="slide_text"):
         await run_agent_process(
-            variant="baseline", arxiv_id="x", paper_url="https://example.com"
+            variant="baseline",
+            arxiv_id="x",
+            paper_url="https://example.com",
+            eval_context=EVAL_CONTEXT,
         )
 
 

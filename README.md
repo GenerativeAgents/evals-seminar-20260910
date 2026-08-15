@@ -170,7 +170,7 @@ uv run eval/publish_dataset.py
 uv run eval/run_eval.py baseline
 ```
 
-publish済みのDatasetをrefで取得し、3論文それぞれについてエージェントを実行して採点します。各Dataset行の実行は1回で、反復回数のオプションはありません。
+publish済みのDatasetをrefで取得し、3論文それぞれについてエージェントを実行して採点します。各Dataset行の実行は1回で、反復回数のオプションはありません。評価は`EvaluationLogger`へ`SlideAgentModel(weave.Model)`を渡して記録するため、評価時もAgent modelのversionが追跡されます。
 
 品質軸は次の4つです。
 
@@ -196,7 +196,9 @@ uv run eval/run_eval.py improvement-2
 
 ### 4. Evaluation行からAgent Traceを調査する
 
-Model出力の`conversation_id`（`<variant>:<thread_id>`形式）は、Agents画面のconversation IDと対応しています。スコアが低い行や回帰した行を見つけたら、`conversation_id`でAgents画面のTraceを開き、モデル呼び出し・ツール呼び出し・SubAgent呼び出しから原因を調査してください。
+各Dataset行の実行時に、`EvaluationLogger.log_prediction()`が発行した`weave.eval.run_id`と`weave.eval.predict_and_score_call_id`をTypeScriptエージェントへ渡します。これらの属性はモデル呼び出し・ツール呼び出し・SubAgent呼び出しを含む全Agent spanへ記録されるため、Evaluation詳細の「View spans」から対応するAgent Traceを直接調査できます。
+
+LLM spanにはOpenRouter応答のinput/output/reasoning/cache token usageを記録し、`gen_ai.usage.total_tokens`とOpenRouterが返す実課金値`openrouter.usage.cost`も保存します。Model出力の`conversation_id`（`<variant>:<thread_id>`形式）はAgents画面のconversation IDにも対応しています。
 
 ## ファイル構成
 
