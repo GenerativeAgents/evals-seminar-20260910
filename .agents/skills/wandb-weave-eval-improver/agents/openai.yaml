@@ -1,0 +1,4 @@
+interface:
+  display_name: "W&B Weave Eval Improver"
+  short_description: "Weave評価のfailure分析から隔離実装と再評価までを自動化"
+  default_prompt: "$wandb-weave-eval-improver を使って既存Evaluationを改善してください。Evaluation ID/URL: <入力>。対象指標(default): tool_correctness.passed↑、summarization.summarization_eval_score↑、summarization.is_entity_dense↑、summarization.entity_density↑、hallucination_free.has_hallucination↓、SlideQualityScorer.score↑、SlideQualityScorer.passed↑。変更対象(default): workspaces/<variant>/AGENTS.md・workspaces/<variant>/.agent/skills/・system prompt、次にagent orchestration、最後にfailureと直接関係するアプリ実装・model/tool設定。全指標を比較し、支配的failureに対応する主指標と変更箇所を1つ選び、隔離worktreeで1回だけ再評価してください。"
