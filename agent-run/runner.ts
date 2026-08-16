@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { AGENT_MODEL, createSlideAgent } from "../agent/agent";
 import {
   buildConversationId,
+  type EvaluationTraceContext,
   wrapAgentWithWeaveTracing,
 } from "../agent/weave-agent-tracing";
 import { initWeaveAgentTrace } from "../agent/weave-client";
@@ -30,6 +31,7 @@ export interface RunSlideAgentOptions {
   variant: string;
   workspaceDir: string;
   entrypoint?: "cli" | "eval";
+  evalContext?: EvaluationTraceContext;
 }
 
 export interface RunSlideAgentResult {
@@ -128,7 +130,10 @@ export async function runSlideAgent(
     model: AGENT_MODEL,
     variant: options.variant,
     entrypoint: options.entrypoint ?? "cli",
-    attributes: { arxiv_id: options.arxivId },
+    attributes: {
+      arxiv_id: options.arxivId,
+      ...(options.evalContext ?? {}),
+    },
   });
   const config = {
     recursionLimit: 150,

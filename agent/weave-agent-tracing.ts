@@ -42,11 +42,15 @@ interface TraceOptions {
   attributes?: Record<string, string | number | boolean>;
 }
 
+export type EvaluationTraceContext = Record<
+  `weave.eval.${string}`,
+  string | number | boolean
+>;
+
 /** Evaluation行とAgent Traceを対応付ける共通のconversation ID形式。 */
 export function buildConversationId(variant: string, threadId: string): string {
   return `${variant}:${threadId}`;
 }
-
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
@@ -189,6 +193,38 @@ function toWeaveUsage(response: AIMessage): WeaveUsage {
   };
 }
 
+/** OpenRouterがusageへ返す実課金情報をLLM spanのcustom attributesへ写す。 */
+export function toOpenRouterUsageAttributes(
+  response: AIMessage,
+): Record<string, number> {
+  const usage = response.response_metadata?.usage;
+  if (!usage || typeof usage !== "object") {
+    return {};
+  }
+
+  const raw = usage as Record<string, unknown>;
+  const attributes: Record<string, number> = {};
+  const totalTokens =
+    raw.total_tokens ?? response.usage_metadata?.total_tokens;
+  const cost = raw.cost;
+  if (typeof totalTokens === "number" && Number.isFinite(totalTokens)) {
+    attributes["gen_ai.usage.total_tokens"] = totalTokens;
+  }
+  if (typeof cost === "number" && Number.isFinite(cost)) {
+    attributes["openrouter.usage.cost"] = cost;
+  }
+
+  const costDetails = raw.cost_details;
+  if (costDetails && typeof costDetails === "object") {
+    const upstream = (costDetails as Record<string, unknown>)
+      .upstream_inference_cost;
+    if (typeof upstream === "number" && Number.isFinite(upstream)) {
+      attributes["openrouter.usage.upstream_inference_cost"] = upstream;
+    }
+  }
+  return attributes;
+}
+
 function toolResultToText(result: unknown): string {
   if (result && typeof result === "object" && "content" in result) {
     return contentToText(result.content);
@@ -261,6 +297,7 @@ export function createWeaveAgentTraceMiddleware() {
                 ? response.response_metadata.model_name
                 : undefined,
           });
+          llm.setAttributes(toOpenRouterUsageAttributes(response));
           return response;
         } catch (error) {
           caughtError = toError(error);

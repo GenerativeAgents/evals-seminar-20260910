@@ -12,6 +12,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config as loadDotenv } from "dotenv";
 import { createRunWorkspace } from "../agent/run-workspace";
+import type { EvaluationTraceContext } from "../agent/weave-agent-tracing";
 import { flushWeaveAgentTrace } from "../agent/weave-client";
 import { runSlideAgent } from "./runner";
 
@@ -31,17 +32,36 @@ function parseArgs(argv: string[]): Record<string, string> {
   return args;
 }
 
+function parseEvalContext(value: string): EvaluationTraceContext {
+  const parsed: unknown = JSON.parse(value);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("--eval-context must be a JSON object.");
+  }
+  const context = parsed as Record<string, unknown>;
+  for (const key of [
+    "weave.eval.run_id",
+    "weave.eval.predict_and_score_call_id",
+  ]) {
+    if (typeof context[key] !== "string" || context[key].length === 0) {
+      throw new Error(`--eval-context is missing required string: ${key}`);
+    }
+  }
+  return context as EvaluationTraceContext;
+}
+
 const args = parseArgs(process.argv.slice(2));
 const arxivId = args["arxiv-id"];
 const paperUrl = args["paper-url"];
 const variant = args["variant"];
 const runId = args["run-id"];
-if (!arxivId || !paperUrl || !variant || !runId) {
+const evalContextJson = args["eval-context"];
+if (!arxivId || !paperUrl || !variant || !runId || !evalContextJson) {
   console.error(
-    "Usage: tsx agent-run/eval.ts --arxiv-id <id> --paper-url <url> --variant <variant> --run-id <hex>",
+    "Usage: tsx agent-run/eval.ts --arxiv-id <id> --paper-url <url> --variant <variant> --run-id <hex> --eval-context <json>",
   );
   process.exit(1);
 }
+const evalContext = parseEvalContext(evalContextJson);
 
 const workspaceDir = createRunWorkspace(variant, runId);
 console.log(`[workspace] ${path.relative(ROOT, workspaceDir)}`);
@@ -52,6 +72,7 @@ const result = await runSlideAgent({
   variant,
   workspaceDir,
   entrypoint: "eval",
+  evalContext,
 });
 
 try {

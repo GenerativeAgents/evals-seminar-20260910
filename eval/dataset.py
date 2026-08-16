@@ -34,14 +34,22 @@ def load_settings(*, require_openrouter: bool) -> Settings:
     """`.env`を読み込み、評価に必要な環境変数を検証する。"""
     load_dotenv(ROOT / ".env", override=True)
     wandb_api_key = os.environ.get("WANDB_API_KEY", "").strip()
-    weave_project = os.environ.get("WEAVE_PROJECT", "").strip()
+    wandb_entity = os.environ.get("WANDB_ENTITY", "").strip()
+    wandb_project = os.environ.get("WANDB_PROJECT", "").strip()
+    legacy_weave_project = os.environ.get("WEAVE_PROJECT", "").strip()
+    if wandb_entity and wandb_entity != "your_wandb_entity_here":
+        weave_project = f"{wandb_entity}/{wandb_project or DATASET_NAME}"
+    else:
+        weave_project = legacy_weave_project
     openrouter_api_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
 
     missing = []
     if not wandb_api_key:
         missing.append("WANDB_API_KEY")
     if not weave_project:
-        missing.append("WEAVE_PROJECT (例: <your-entity>/evals-seminar-20260910)")
+        missing.append(
+            "WANDB_ENTITY（必要ならWANDB_PROJECTも設定。WEAVE_PROJECTも互換利用可）"
+        )
     if require_openrouter and not openrouter_api_key:
         missing.append("OPENROUTER_API_KEY")
     if missing:

@@ -1,6 +1,6 @@
 """SlideAgentModelとTypeScriptエージェントとのsubprocess境界。
 
-Weave EvaluationのDataset行ごとに`agent-run/eval.ts`を1回起動し、
+Weave EvaluationLoggerのDataset行ごとに`agent-run/eval.ts`を1回起動し、
 run workspaceへ書かれたevaluation-result.jsonを読み取ってModel出力にする。
 プロセスの起動失敗・タイムアウト・JSONプロトコル違反はインフラエラーとして
 例外にし、Weave上でもその行の実行をerrorにする。
@@ -9,6 +9,7 @@ run workspaceへ書かれたevaluation-result.jsonを読み取ってModel出力�
 import asyncio
 import json
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 import weave
@@ -29,7 +30,13 @@ REQUIRED_RESULT_KEYS = [
 ]
 
 
-async def run_agent_process(*, variant: str, arxiv_id: str, paper_url: str) -> dict:
+async def run_agent_process(
+    *,
+    variant: str,
+    arxiv_id: str,
+    paper_url: str,
+    eval_context: dict[str, Any],
+) -> dict:
     """TypeScriptエージェントを評価試行内で1回実行し、結果ファイルを読む。"""
     run_id = uuid4().hex
     context = f"variant={variant}, arxiv_id={arxiv_id}, run_id={run_id}"
@@ -45,6 +52,8 @@ async def run_agent_process(*, variant: str, arxiv_id: str, paper_url: str) -> d
         variant,
         "--run-id",
         run_id,
+        "--eval-context",
+        json.dumps(eval_context, ensure_ascii=False),
         cwd=ROOT,
     )
     try:
@@ -86,9 +95,15 @@ class SlideAgentModel(weave.Model):
     variant: str
 
     @weave.op()
-    async def predict(self, arxiv_id: str, paper_url: str) -> dict:
+    async def predict(
+        self,
+        arxiv_id: str,
+        paper_url: str,
+        eval_context: dict[str, Any],
+    ) -> dict:
         return await run_agent_process(
             variant=self.variant,
             arxiv_id=arxiv_id,
             paper_url=paper_url,
+            eval_context=eval_context,
         )

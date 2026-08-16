@@ -3,8 +3,9 @@
 import { useDefaultTool } from "@copilotkit/react-core";
 import type { CatchAllActionRenderProps } from "@copilotkit/react-core";
 import PptxGenJS from "pptxgenjs";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { type SlideData, useSlideData } from "./slide-context";
+import type { Variant } from "../variants";
 
 const colors = {
   primary: "1B2A4A",
@@ -12,6 +13,27 @@ const colors = {
   text: "333333",
   white: "FFFFFF",
 };
+
+// CopilotKit can remount completed tool renderers while the conversation is
+// updating. Cache PPTX generation so a remount can restore the UI without
+// regenerating the file, while tracing remains a separate one-time effect.
+const presentationPptxCache = new Map<string, Promise<string>>();
+const presentationTraceRequests = new Set<string>();
+
+function getPresentationPptx(
+  presentationKey: string,
+  data: SlideData,
+): Promise<string> {
+  const cached = presentationPptxCache.get(presentationKey);
+  if (cached) return cached;
+
+  const generation = generatePptxBase64(data).catch((error) => {
+    presentationPptxCache.delete(presentationKey);
+    throw error;
+  });
+  presentationPptxCache.set(presentationKey, generation);
+  return generation;
+}
 
 async function generatePptxBase64(data: SlideData): Promise<string> {
   const pptx = new PptxGenJS();
@@ -107,8 +129,14 @@ function Spinner({ className }: { className?: string }) {
   );
 }
 
-function DownloadCard() {
-  const { pptxBase64 } = useSlideData();
+function DownloadCard({
+  variant,
+  threadId,
+}: {
+  variant: Variant;
+  threadId?: string;
+}) {
+  const { pptxBase64, slideData } = useSlideData();
 
   if (!pptxBase64) return null;
 
@@ -127,6 +155,34 @@ function DownloadCard() {
     a.download = "presentation.pptx";
     a.click();
     URL.revokeObjectURL(url);
+
+    if (!threadId) {
+      console.warn("[weave] PPTX download was not traced: thread ID is missing.");
+      return;
+    }
+
+    void fetch("/api/pptx-download", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        variant,
+        threadId,
+        downloadEventId: crypto.randomUUID(),
+        fileName: "presentation.pptx",
+        fileSizeBytes: blob.size,
+        slideCount: slideData?.slides.length ?? 0,
+        downloadedAt: new Date().toISOString(),
+      }),
+      keepalive: true,
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+      })
+      .catch((error) => {
+        console.warn("[weave] Failed to trace PPTX download:", error);
+      });
   };
 
   return (
@@ -169,17 +225,33 @@ function DownloadCard() {
 function GeneratePptxHandler({
   result,
   status,
-}: { result: unknown; status: string }) {
-  const { setSlideData, setPptxBase64 } = useSlideData();
-  const generatedRef = useRef(false);
+  variant,
+  threadId,
+}: {
+  result: unknown;
+  status: string;
+  variant: Variant;
+  threadId?: string;
+}) {
+  const { slideData, pptxBase64, setSlideData, setPptxBase64 } =
+    useSlideData();
+  const currentPresentationKey = slideData
+    ? JSON.stringify(slideData)
+    : null;
+  const serializedResult =
+    typeof result === "string" ? result : JSON.stringify(result);
 
   useEffect(() => {
-    if (status !== "complete" || generatedRef.current) return;
+    if (status !== "complete" || !serializedResult) return;
 
-    const parsed = typeof result === "string" ? JSON.parse(result) : result;
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(serializedResult) as Record<string, unknown>;
+    } catch (error) {
+      console.warn("[weave] Failed to parse presentation result:", error);
+      return;
+    }
     if (!parsed?.success) return;
-
-    generatedRef.current = true;
 
     const data: SlideData = {
       title: (parsed.title as string) ?? "",
@@ -187,12 +259,61 @@ function GeneratePptxHandler({
       slides: (parsed.slides as SlideData["slides"]) ?? [],
     };
 
-    setSlideData(data);
-    generatePptxBase64(data).then(setPptxBase64);
-  }, [status, result, setSlideData, setPptxBase64]);
+    const presentationKey = JSON.stringify(data);
+    const requestKey = `${variant}:${threadId ?? "missing"}:${presentationKey}`;
+
+    // Restoring the preview and download state must not be coupled to whether
+    // the same deck was already traced. The provider may have been remounted.
+    if (currentPresentationKey !== presentationKey) {
+      setSlideData(data);
+    }
+
+    getPresentationPptx(presentationKey, data)
+      .then((base64) => {
+        if (pptxBase64 !== base64) {
+          setPptxBase64(base64);
+        }
+        if (!threadId) {
+          console.warn(
+            "[weave] Presentation content was not traced: thread ID is missing.",
+          );
+          return;
+        }
+        if (presentationTraceRequests.has(requestKey)) return;
+        presentationTraceRequests.add(requestKey);
+
+        return fetch("/api/presentation-trace", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            variant,
+            threadId,
+            fileName: "presentation.pptx",
+            pptxBase64: base64,
+            slideData: data,
+          }),
+        }).then((response) => {
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+        });
+      })
+      .catch((error) => {
+        // A failed upload may be retried by a later render/remount.
+        presentationTraceRequests.delete(requestKey);
+        console.warn("[weave] Failed to trace presentation content:", error);
+      });
+  }, [
+    status,
+    serializedResult,
+    variant,
+    threadId,
+    setSlideData,
+    setPptxBase64,
+  ]);
 
   if (status === "complete") {
-    return <DownloadCard />;
+    return <DownloadCard variant={variant} threadId={threadId} />;
   }
 
   return (
@@ -206,14 +327,27 @@ function GeneratePptxHandler({
   );
 }
 
-export function ToolCallRenderer() {
+export function ToolCallRenderer({
+  variant,
+  threadId,
+}: {
+  variant: Variant;
+  threadId?: string;
+}) {
   useDefaultTool(
     {
       render: (props: CatchAllActionRenderProps) => {
         const { status, name, args } = props;
 
         if (name === "generate_pptx") {
-          return <GeneratePptxHandler result={props.result} status={status} />;
+          return (
+            <GeneratePptxHandler
+              result={props.result}
+              status={status}
+              variant={variant}
+              threadId={threadId}
+            />
+          );
         }
 
         if (status === "inProgress") {

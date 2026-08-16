@@ -79,12 +79,16 @@ cp .env.sample .env
 ```env
 OPENROUTER_API_KEY=your_openrouter_api_key_here
 WANDB_API_KEY=your_wandb_api_key_here
-WEAVE_PROJECT=evals-seminar-20260910
+WANDB_ENTITY=your_wandb_entity_here
+WANDB_PROJECT=evals-seminar-20260910
 ```
 
 - `OPENROUTER_API_KEY`: エージェント実行と評価judgeの両方で使用（OpenRouter経由でdeepseek-v4-flashとopenai/gpt-5.4を呼び出す）
 - `WANDB_API_KEY`: WeaveへのAgent Trace送信と評価の記録に使用
-- `WEAVE_PROJECT`: Dataset・Evaluation・Traceの記録先。project名のみの場合は自分のdefault entityに記録されます。`<your-entity>/evals-seminar-20260910` のようにentityを明示することもできます
+- `WANDB_ENTITY`: Dataset・Evaluation・Traceの記録先となるW&B entity
+- `WANDB_PROJECT`: Dataset・Evaluation・Traceの記録先となるW&B project（省略時は `evals-seminar-20260910`）
+
+既存環境との互換性のため、`WEAVE_PROJECT=<entity>/<project>` 形式も利用できます。`WANDB_ENTITY` が設定されている場合は、`WANDB_ENTITY` と `WANDB_PROJECT` が優先されます。
 
 ## ワークスペースの構成
 
@@ -115,7 +119,9 @@ http://localhost:3000 を開き、チャット欄にarXiv論文のURLを貼り�
 > [!NOTE]
 > 会話の状態はインメモリで保持されるため、devサーバを再起動すると過去の会話の続きからは再開できません。
 
-各ユーザー発言は1 Turnとして、モデル呼び出し・ツール呼び出し・SubAgent呼び出しがWeaveのAgents画面に記録されます。SubAgentは呼び出し全体のみを記録し、その内部のモデル・ツール呼び出しは記録しません。
+`WANDB_API_KEY`、`WANDB_ENTITY`、`WANDB_PROJECT`を設定すると、各ユーザー発言を1 Turnとして、モデル呼び出し・ツール呼び出し・SubAgent呼び出しが`${WANDB_ENTITY}/${WANDB_PROJECT}`のWeave Agents画面に記録されます。SubAgentは呼び出し全体のみを記録し、その内部のモデル・ツール呼び出しは記録しません。
+
+UIでスライドが生成されると、PPTX本体もWeaveの`trace_presentation` Callへ自動的に記録されます。CallにはWeave上で確認できるHTMLプレビューも付き、対応するAgent TraceにはCall参照が`trace_presentation`ツール結果として残ります。同じconversation内の同一スライドは1回だけ記録されるため、UIの再描画でCallが重複することはありません。PPTXのダウンロード操作は従来どおり同じconversation IDへ別イベントとして記録されます。
 
 ## エージェントの実行（ヘッドレスランナー）
 
@@ -137,6 +143,31 @@ npm run agent -- 1706.03762 improvement-2
 `results/` は手動実行の成果物置き場（Git管理外・実行時に自動生成）であり、後述のライブ評価はこのファイルを読みません。元リポジトリでの改善実験の出力は [docs/logs/20260813-archive-original-eval-results/](docs/logs/20260813-archive-original-eval-results/) にアーカイブしています。
 
 ヘッドレスランナーの2ターンも同じconversation IDでWeaveへ送信されます。プロセス終了前にOpenTelemetry spanをflushするため、短命なCLI実行でもトレースが欠落しないようにしています。
+
+
+## Self-improvementへの導入
+W&Bは、W&Bに保存された情報をCoding Agentが取得できる[W&B Skills](https://github.com/wandb/skills)・[W&B MCP](https://github.com/wandb/wandb-mcp-server)を提供しています。W&B Skillsのinstallは[こちら](https://github.com/wandb/skills)からできます。
+
+その後、Coding Agentに以下の指示をしてください。Coding Agentが改善を自律的に行う様子が確認できるかと思います。改良するAgentの構成対象や指標を指定することで、精度の高い改善を行うことができます。いきなりloopを回さずにまずは一つずつ改善を積み重ねていきましょう。
+
+```text
+$wandb-primary　を使い、Evaluation id: <ご自身のWeaveのEvaluation IDを入力してください。Evaluationの隣のコードをクリックするとコピーができます>
+の評価結果を分析してください。
+その後 bottle neckを一つ改善し、再度評価を行い、その結果をweaveに保存してください。
+なお、修正と実行はworktreeで行ってください
+```
+
+## オンライン評価
+大量のTraceをすべて人が読むことは現実的ではありません。W&B Weave SignalsはAgentのTurnを評価し、User FrustrationやLow Quality ResponseなどのTag、User SatisfactionやResponse QualityなどのRatingとして可視化するBuilt-inのオンライン評価機能です。Custom Signalも定義できます。さらにAutomationsを設定すると、Monitor metricやTrace activityを条件としてSlack通知やWebhookを実行できます。詳しくは[シグナルを使ってエージェントをモニタリングする](https://docs.wandb.ai/ja/weave/guides/tracking/view-agent-signals)、[カスタムモニターを設定する](https://docs.wandb.ai/ja/weave/guides/evaluation/custom-monitors)、[オートメーションを設定する](https://docs.wandb.ai/ja/weave/guides/evaluation/automations)を参照してください。
+
+W&BのUI上で”User frustration”のSignalsを設定し、再度アプリケーションを起動した後、会話の中で
+```text
+いえ、内容がよくないです。もっと論理的にわかりやすい構造にしてください
+```
+などの不満を入れてみてください。WeaveのAgent->SignalsのタブにてUser frustrationのtagがついているかどうか、確認をしてみてください。
+
+![WeaveのAgent SignalsタブでUser frustrationタグを確認する画面](docs/images/weave-user-frustration-signal.png)
+
 
 ### 使用論文
 
@@ -164,7 +195,7 @@ uv run eval/publish_dataset.py
 uv run eval/run_eval.py baseline
 ```
 
-publish済みのDatasetをrefで取得し、3論文それぞれについてエージェントを実行して採点します。各Dataset行の実行は1回で、反復回数のオプションはありません。
+publish済みのDatasetをrefで取得し、3論文それぞれについてエージェントを実行して採点します。各Dataset行の実行は1回で、反復回数のオプションはありません。評価は`EvaluationLogger`へ`SlideAgentModel(weave.Model)`を渡して記録するため、評価時もAgent modelのversionが追跡されます。
 
 品質軸は次の4つです。
 
@@ -190,7 +221,9 @@ uv run eval/run_eval.py improvement-2
 
 ### 4. Evaluation行からAgent Traceを調査する
 
-Model出力の`conversation_id`（`<variant>:<thread_id>`形式）は、Agents画面のconversation IDと対応しています。スコアが低い行や回帰した行を見つけたら、`conversation_id`でAgents画面のTraceを開き、モデル呼び出し・ツール呼び出し・SubAgent呼び出しから原因を調査してください。
+各Dataset行の実行時に、`EvaluationLogger.log_prediction()`が発行した`weave.eval.run_id`と`weave.eval.predict_and_score_call_id`をTypeScriptエージェントへ渡します。これらの属性はモデル呼び出し・ツール呼び出し・SubAgent呼び出しを含む全Agent spanへ記録されるため、Evaluation詳細の「View spans」から対応するAgent Traceを直接調査できます。
+
+LLM spanにはOpenRouter応答のinput/output/reasoning/cache token usageを記録し、`gen_ai.usage.total_tokens`とOpenRouterが返す実課金値`openrouter.usage.cost`も保存します。Model出力の`conversation_id`（`<variant>:<thread_id>`形式）はAgents画面のconversation IDにも対応しています。
 
 ## ファイル構成
 
