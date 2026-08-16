@@ -8,9 +8,9 @@
     "check": "tsc --noEmit"
   },
   "dependencies": {
-    "@copilotkit/react-core": "1.54.0",
-    "@copilotkit/react-ui": "1.54.0",
-    "@copilotkit/runtime": "1.54.0",
+    "@copilotkit/react-core": "1.68.1",
+    "@copilotkit/react-ui": "1.68.1",
+    "@copilotkit/runtime": "1.68.1",
     "@langchain/core": "1.1.49",
     "@langchain/langgraph-checkpoint": "1.1.1",
     "@langchain/openrouter": "0.3.0",
