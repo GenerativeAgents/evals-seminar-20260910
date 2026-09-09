@@ -144,8 +144,8 @@ npm run agent -- 1706.03762 improvement-2
 
 ヘッドレスランナーの2ターンも同じconversation IDでWeaveへ送信されます。プロセス終了前にOpenTelemetry spanをflushするため、短命なCLI実行でもトレースが欠落しないようにしています。
 
-
 ## Self-improvementへの導入
+
 W&Bは、W&Bに保存された情報をCoding Agentが取得できる[W&B Skills](https://github.com/wandb/skills)・[W&B MCP](https://github.com/wandb/wandb-mcp-server)を提供しています。W&B Skillsのinstallは[こちら](https://github.com/wandb/skills)からできます。
 
 その後、Coding Agentに以下の指示をしてください。Coding Agentが改善を自律的に行う様子が確認できるかと思います。改良するAgentの構成対象や指標を指定することで、精度の高い改善を行うことができます。いきなりloopを回さずにまずは一つずつ改善を積み重ねていきましょう。
@@ -158,16 +158,18 @@ $wandb-primary　を使い、Evaluation id: <ご自身のWeaveのEvaluation ID�
 ```
 
 ## オンライン評価
+
 大量のTraceをすべて人が読むことは現実的ではありません。W&B Weave SignalsはAgentのTurnを評価し、User FrustrationやLow Quality ResponseなどのTag、User SatisfactionやResponse QualityなどのRatingとして可視化するBuilt-inのオンライン評価機能です。Custom Signalも定義できます。さらにAutomationsを設定すると、Monitor metricやTrace activityを条件としてSlack通知やWebhookを実行できます。詳しくは[シグナルを使ってエージェントをモニタリングする](https://docs.wandb.ai/ja/weave/guides/tracking/view-agent-signals)、[カスタムモニターを設定する](https://docs.wandb.ai/ja/weave/guides/evaluation/custom-monitors)、[オートメーションを設定する](https://docs.wandb.ai/ja/weave/guides/evaluation/automations)を参照してください。
 
 W&BのUI上で”User frustration”のSignalsを設定し、再度アプリケーションを起動した後、会話の中で
+
 ```text
 いえ、内容がよくないです。もっと論理的にわかりやすい構造にしてください
 ```
+
 などの不満を入れてみてください。WeaveのAgent->SignalsのタブにてUser frustrationのtagがついているかどうか、確認をしてみてください。
 
 ![WeaveのAgent SignalsタブでUser frustrationタグを確認する画面](docs/images/weave-user-frustration-signal.png)
-
 
 ### 使用論文
 
@@ -199,12 +201,12 @@ publish済みのDatasetをrefで取得し、3論文それぞれについてエ�
 
 品質軸は次の4つです。
 
-| 品質軸             | scorer                | 実装                                     |
-| ------------------ | --------------------- | ---------------------------------------- |
-| Tool Correctness   | `tool_correctness`    | 自作function-based scorer（決定的判定）  |
-| Summarization      | `summarization`       | プリセット`SummarizationScorer`への移譲  |
-| Hallucination Free | `hallucination_free`  | プリセット`HallucinationFreeScorer`への移譲 |
-| Slide Quality      | `SlideQualityScorer`  | 自作class-based scorer（LLM-as-a-judge） |
+| 品質軸             | scorer               | 実装                                        |
+| ------------------ | -------------------- | ------------------------------------------- |
+| Tool Correctness   | `tool_correctness`   | 自作function-based scorer（決定的判定）     |
+| Summarization      | `summarization`      | プリセット`SummarizationScorer`への移譲     |
+| Hallucination Free | `hallucination_free` | プリセット`HallucinationFreeScorer`への移譲 |
+| Slide Quality      | `SlideQualityScorer` | 自作class-based scorer（LLM-as-a-judge）    |
 
 scorerは数値だけでなく判定理由も返し、Weave上でDataset・Model・scorerのバージョンとともに記録されます。judgeはlitellm経由の`openrouter/openai/gpt-5.4`です。
 
