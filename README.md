@@ -1,23 +1,12 @@
 # AI Agent評価体系構築セミナー ハンズオン（2026/9/10）
 
-「arXiv論文→スライド生成」ワークフローを題材に、W&B Weaveのライブ評価で「計測→改善→再計測」のループを回すサンプルです。
-
-Software Design誌「実践LLMアプリケーション開発」の[第32回](https://github.com/mahm/softwaredesign-llm-application/tree/main/32)（エージェント本体と対話UI）および[第36回](https://github.com/mahm/softwaredesign-llm-application/tree/main/36)（評価）のサンプルコードをセミナー用に再構成しています。
-
-> [!NOTE]
-> 元のサンプルコードはNode.jsとBunを使用していますが、本リポジトリは受講者がインストールするツールを減らすため、Node.jsのみで動くように変更しています。
+arXiv論文からスライドを生成するエージェントを題材に、W&B Weaveで評価を実施するハンズオンです。
 
 エージェント本体はTypeScript（deepagents）、評価はPython（W&B Weave）で実装しています。
 
-3つのスキルの作り込み段階を持ち、各改善を直前の段階における改善と比較します。
-
-```
-baseline        スキルはワークフローの機構のみ(取得手順・JSON形式・枚数・確認フロー)
-  ↓ +スライド設計ガイド                → 主にSlide Qualityで比較
-improvement-1   詰め込み禁止・主張型タイトル・論理的な流れ
-  ↓ +保存前の事実確認                  → 主にHallucination Free(本文への忠実性)で比較
-improvement-2   本文照合・一般化禁止・照合できない数値は書かない
-```
+> [!NOTE]
+> Software Design誌「実践LLMアプリケーション開発」の[第32回](https://github.com/mahm/softwaredesign-llm-application/tree/main/32)（エージェント本体と対話UI）および[第36回](https://github.com/mahm/softwaredesign-llm-application/tree/main/36)（評価）のサンプルコードをセミナー用に再構成しています。
+> 元のサンプルコードはNode.jsとBunを使用していますが、本リポジトリは受講者がインストールするツールを減らすため、Node.jsのみで動くように変更しています。
 
 ## 前提条件
 
@@ -88,18 +77,6 @@ WANDB_PROJECT=evals-seminar-20260910
 - `WANDB_ENTITY`: Dataset・Evaluation・Traceの記録先となるW&B entity
 - `WANDB_PROJECT`: Dataset・Evaluation・Traceの記録先となるW&B project（省略時は `evals-seminar-20260910`）
 
-## ワークスペースの構成
-
-`workspaces/<variant>/` は設定（`AGENTS.md`）とスキル（`.agent/skills/`）を保持する読み取り専用のworkspace templateです。CLI・Web UI・評価はいずれもtemplateを直接使わず、実行時に `tmp/workspaces/<yyyyMMddHHmmss>-<variant>-<runId>/` へrun workspaceを作成して、その中で動作します。
-
-| 実行経路         | run workspaceの分離単位 |
-| ---------------- | ----------------------- |
-| 手動CLI          | コマンド実行ごと        |
-| Web UI           | conversationごと        |
-| Weave Evaluation | Dataset行の実行ごと     |
-
-これにより、並列実行や再実行でファイルが競合したり、過去の生成物を誤って読むことがありません。run workspaceは実行後も調査用に残り、自動削除されません（`tmp/`配下はGit管理外です。不要になったら手動で削除してください）。
-
 ## UIの起動（対話アプリ）
 
 Next.js + CopilotKitで実装された対話UIを起動します。エージェントの挙動をブラウザ上で対話的に確認できます。
@@ -120,6 +97,18 @@ http://localhost:3000 を開き、チャット欄にarXiv論文のURLを貼り�
 `WANDB_API_KEY`、`WANDB_ENTITY`、`WANDB_PROJECT`を設定すると、各ユーザー発言を1 Turnとして、モデル呼び出し・ツール呼び出し・SubAgent呼び出しが`${WANDB_ENTITY}/${WANDB_PROJECT}`のWeave Agents画面に記録されます。SubAgentは呼び出し全体のみを記録し、その内部のモデル・ツール呼び出しは記録しません。
 
 UIでスライドが生成されると、PPTX本体もWeaveの`trace_presentation` Callへ自動的に記録されます。CallにはWeave上で確認できるHTMLプレビューも付き、対応するAgent TraceにはCall参照が`trace_presentation`ツール結果として残ります。同じconversation内の同一スライドは1回だけ記録されるため、UIの再描画でCallが重複することはありません。PPTXのダウンロード操作は従来どおり同じconversation IDへ別イベントとして記録されます。
+
+## ワークスペースの構成
+
+`workspaces/<variant>/` は設定（`AGENTS.md`）とスキル（`.agent/skills/`）を保持する読み取り専用のworkspace templateです。CLI・Web UI・評価はいずれもtemplateを直接使わず、実行時に `tmp/workspaces/<yyyyMMddHHmmss>-<variant>-<runId>/` へrun workspaceを作成して、その中で動作します。
+
+| 実行経路         | run workspaceの分離単位 |
+| ---------------- | ----------------------- |
+| 手動CLI          | コマンド実行ごと        |
+| Web UI           | conversationごと        |
+| Weave Evaluation | Dataset行の実行ごと     |
+
+これにより、並列実行や再実行でファイルが競合したり、過去の生成物を誤って読むことがありません。run workspaceは実行後も調査用に残り、自動削除されません（`tmp/`配下はGit管理外です。不要になったら手動で削除してください）。
 
 ## エージェントの実行（ヘッドレスランナー）
 
@@ -142,33 +131,6 @@ npm run agent -- 1706.03762 improvement-2
 
 ヘッドレスランナーの2ターンも同じconversation IDでWeaveへ送信されます。プロセス終了前にOpenTelemetry spanをflushするため、短命なCLI実行でもトレースが欠落しないようにしています。
 
-## Self-improvementへの導入
-
-W&Bは、W&Bに保存された情報をCoding Agentが取得できる[W&B Skills](https://github.com/wandb/skills)・[W&B MCP](https://github.com/wandb/wandb-mcp-server)を提供しています。W&B Skillsのinstallは[こちら](https://github.com/wandb/skills)からできます。
-
-その後、Coding Agentに以下の指示をしてください。Coding Agentが改善を自律的に行う様子が確認できるかと思います。改良するAgentの構成対象や指標を指定することで、精度の高い改善を行うことができます。いきなりloopを回さずにまずは一つずつ改善を積み重ねていきましょう。
-
-```text
-$wandb-primary　を使い、Evaluation id: <ご自身のWeaveのEvaluation IDを入力してください。Evaluationの隣のコードをクリックするとコピーができます>
-の評価結果を分析してください。
-その後 bottle neckを一つ改善し、再度評価を行い、その結果をweaveに保存してください。
-なお、修正と実行はworktreeで行ってください
-```
-
-## オンライン評価
-
-大量のTraceをすべて人が読むことは現実的ではありません。W&B Weave SignalsはAgentのTurnを評価し、User FrustrationやLow Quality ResponseなどのTag、User SatisfactionやResponse QualityなどのRatingとして可視化するBuilt-inのオンライン評価機能です。Custom Signalも定義できます。さらにAutomationsを設定すると、Monitor metricやTrace activityを条件としてSlack通知やWebhookを実行できます。詳しくは[シグナルを使ってエージェントをモニタリングする](https://docs.wandb.ai/ja/weave/guides/tracking/view-agent-signals)、[カスタムモニターを設定する](https://docs.wandb.ai/ja/weave/guides/evaluation/custom-monitors)、[オートメーションを設定する](https://docs.wandb.ai/ja/weave/guides/evaluation/automations)を参照してください。
-
-W&BのUI上で”User frustration”のSignalsを設定し、再度アプリケーションを起動した後、会話の中で
-
-```text
-いえ、内容がよくないです。もっと論理的にわかりやすい構造にしてください
-```
-
-などの不満を入れてみてください。WeaveのAgent->SignalsのタブにてUser frustrationのtagがついているかどうか、確認をしてみてください。
-
-![WeaveのAgent SignalsタブでUser frustrationタグを確認する画面](docs/images/weave-user-frustration-signal.png)
-
 ### 使用論文
 
 - Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, Illia Polosukhin. "Attention Is All You Need." NeurIPS 2017. [arXiv:1706.03762](https://arxiv.org/abs/1706.03762)
@@ -176,6 +138,16 @@ W&BのUI上で”User frustration”のSignalsを設定し、再度アプリケ�
 - Shirley Wu, Evelyn Choi, Arpandeep Khatua, Zhanghan Wang, Joy He-Yueya, Tharindu Cyril Weerasooriya, Wei Wei, Diyi Yang, Jure Leskovec, James Zou. "HumanLM: Simulating Users with State Alignment Beats Response Imitation." 2026. [arXiv:2603.03303](https://arxiv.org/abs/2603.03303)
 
 ## 評価の実行（Weaveライブ評価）
+
+3つのスキルの作り込み段階を持ち、各改善を直前の段階における改善と比較します。
+
+```
+baseline        スキルはワークフローの機構のみ(取得手順・JSON形式・枚数・確認フロー)
+  ↓ +スライド設計ガイド                → 主にSlide Qualityで比較
+improvement-1   詰め込み禁止・主張型タイトル・論理的な流れ
+  ↓ +保存前の事実確認                  → 主にHallucination Free(本文への忠実性)で比較
+improvement-2   本文照合・一般化禁止・照合できない数値は書かない
+```
 
 評価はWeaveの`Evaluation`によるライブ評価です。Datasetの各行についてTypeScriptエージェントをその場で実行し、出力をscorerで採点します。評価結果の正本はWeaveであり、ローカルJSONが必要な場合はEvaluation完了後にWeave Evaluation APIからエクスポートします（評価入力としては使用しません）。
 
@@ -224,6 +196,33 @@ uv run eval/run_eval.py improvement-2
 各Dataset行の実行時に、`EvaluationLogger.log_prediction()`が発行した`weave.eval.run_id`と`weave.eval.predict_and_score_call_id`をTypeScriptエージェントへ渡します。これらの属性はモデル呼び出し・ツール呼び出し・SubAgent呼び出しを含む全Agent spanへ記録されるため、Evaluation詳細の「View spans」から対応するAgent Traceを直接調査できます。
 
 LLM spanにはOpenRouter応答のinput/output/reasoning/cache token usageを記録し、`gen_ai.usage.total_tokens`とOpenRouterが返す実課金値`openrouter.usage.cost`も保存します。Model出力の`conversation_id`（`<variant>:<thread_id>`形式）はAgents画面のconversation IDにも対応しています。
+
+## Self-improvementへの導入
+
+W&Bは、W&Bに保存された情報をCoding Agentが取得できる[W&B Skills](https://github.com/wandb/skills)・[W&B MCP](https://github.com/wandb/wandb-mcp-server)を提供しています。W&B Skillsのinstallは[こちら](https://github.com/wandb/skills)からできます。
+
+その後、Coding Agentに以下の指示をしてください。Coding Agentが改善を自律的に行う様子が確認できるかと思います。改良するAgentの構成対象や指標を指定することで、精度の高い改善を行うことができます。いきなりloopを回さずにまずは一つずつ改善を積み重ねていきましょう。
+
+```text
+$wandb-primary　を使い、Evaluation id: <ご自身のWeaveのEvaluation IDを入力してください。Evaluationの隣のコードをクリックするとコピーができます>
+の評価結果を分析してください。
+その後 bottle neckを一つ改善し、再度評価を行い、その結果をweaveに保存してください。
+なお、修正と実行はworktreeで行ってください
+```
+
+## オンライン評価
+
+大量のTraceをすべて人が読むことは現実的ではありません。W&B Weave SignalsはAgentのTurnを評価し、User FrustrationやLow Quality ResponseなどのTag、User SatisfactionやResponse QualityなどのRatingとして可視化するBuilt-inのオンライン評価機能です。Custom Signalも定義できます。さらにAutomationsを設定すると、Monitor metricやTrace activityを条件としてSlack通知やWebhookを実行できます。詳しくは[シグナルを使ってエージェントをモニタリングする](https://docs.wandb.ai/ja/weave/guides/tracking/view-agent-signals)、[カスタムモニターを設定する](https://docs.wandb.ai/ja/weave/guides/evaluation/custom-monitors)、[オートメーションを設定する](https://docs.wandb.ai/ja/weave/guides/evaluation/automations)を参照してください。
+
+W&BのUI上で”User frustration”のSignalsを設定し、再度アプリケーションを起動した後、会話の中で
+
+```text
+いえ、内容がよくないです。もっと論理的にわかりやすい構造にしてください
+```
+
+などの不満を入れてみてください。WeaveのAgent->SignalsのタブにてUser frustrationのtagがついているかどうか、確認をしてみてください。
+
+![WeaveのAgent SignalsタブでUser frustrationタグを確認する画面](docs/images/weave-user-frustration-signal.png)
 
 ## ファイル構成
 
