@@ -36,20 +36,17 @@ def load_settings(*, require_openrouter: bool) -> Settings:
     wandb_api_key = os.environ.get("WANDB_API_KEY", "").strip()
     wandb_entity = os.environ.get("WANDB_ENTITY", "").strip()
     wandb_project = os.environ.get("WANDB_PROJECT", "").strip()
-    legacy_weave_project = os.environ.get("WEAVE_PROJECT", "").strip()
     if wandb_entity and wandb_entity != "your_wandb_entity_here":
         weave_project = f"{wandb_entity}/{wandb_project or DATASET_NAME}"
     else:
-        weave_project = legacy_weave_project
+        weave_project = ""
     openrouter_api_key = os.environ.get("OPENROUTER_API_KEY", "").strip()
 
     missing = []
     if not wandb_api_key:
         missing.append("WANDB_API_KEY")
     if not weave_project:
-        missing.append(
-            "WANDB_ENTITY（必要ならWANDB_PROJECTも設定。WEAVE_PROJECTも互換利用可）"
-        )
+        missing.append("WANDB_ENTITY（必要ならWANDB_PROJECTも設定）")
     if require_openrouter and not openrouter_api_key:
         missing.append("OPENROUTER_API_KEY")
     if missing:

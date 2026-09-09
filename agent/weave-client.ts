@@ -24,9 +24,7 @@ export function getWeaveProjectPath(): string | undefined {
   if (entity && entity !== WANDB_ENTITY_PLACEHOLDER) {
     return `${entity}/${project}`;
   }
-
-  // Backward compatibility for environments configured from origin/main.
-  return process.env.WEAVE_PROJECT?.trim() || undefined;
+  return undefined;
 }
 /** Initialize Weave once per process. Returns false when tracing is disabled. */
 export async function initWeaveAgentTrace(): Promise<boolean> {
@@ -44,7 +42,7 @@ export async function initWeaveAgentTrace(): Promise<boolean> {
   if (!projectPath) {
     if (!weaveGlobal.__evalsSeminarWeaveDisabledNoticeShown) {
       console.warn(
-        "[weave] WANDB_ENTITY (and optionally WANDB_PROJECT) or WEAVE_PROJECT must be configured; Agent Trace is disabled.",
+        "[weave] WANDB_ENTITY (and optionally WANDB_PROJECT) must be configured; Agent Trace is disabled.",
       );
       weaveGlobal.__evalsSeminarWeaveDisabledNoticeShown = true;
     }
