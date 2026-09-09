@@ -18,6 +18,10 @@ from weave.scorers import HallucinationFreeScorer, SummarizationScorer
 
 JUDGE_MODEL = "openrouter/openai/gpt-5.4"
 
+# judgeの429/一時的なAPIエラーで行のscoreが欠けないよう、litellm全体に再試行を設定する。
+# プリセットscorer(SummarizationScorer / HallucinationFreeScorer)のlitellm呼び出しにも効く。
+litellm.num_retries = 3
+
 
 def _slide_text_missing_result(output: dict) -> dict | None:
     """採点に必要なslide_textが無い場合、judgeを呼ばず理由付きfailを返す。"""
