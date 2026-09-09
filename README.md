@@ -88,8 +88,6 @@ WANDB_PROJECT=evals-seminar-20260910
 - `WANDB_ENTITY`: Dataset・Evaluation・Traceの記録先となるW&B entity
 - `WANDB_PROJECT`: Dataset・Evaluation・Traceの記録先となるW&B project（省略時は `evals-seminar-20260910`）
 
-既存環境との互換性のため、`WEAVE_PROJECT=<entity>/<project>` 形式も利用できます。`WANDB_ENTITY` が設定されている場合は、`WANDB_ENTITY` と `WANDB_PROJECT` が優先されます。
-
 ## ワークスペースの構成
 
 `workspaces/<variant>/` は設定（`AGENTS.md`）とスキル（`.agent/skills/`）を保持する読み取り専用のworkspace templateです。CLI・Web UI・評価はいずれもtemplateを直接使わず、実行時に `tmp/workspaces/<yyyyMMddHHmmss>-<variant>-<runId>/` へrun workspaceを作成して、その中で動作します。

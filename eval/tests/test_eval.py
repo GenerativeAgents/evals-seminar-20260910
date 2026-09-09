@@ -412,7 +412,6 @@ def test_load_settings_prefers_wandb_entity_and_project(monkeypatch):
     monkeypatch.setenv("WANDB_API_KEY", "test-key")
     monkeypatch.setenv("WANDB_ENTITY", "test-entity")
     monkeypatch.setenv("WANDB_PROJECT", "test-project")
-    monkeypatch.setenv("WEAVE_PROJECT", "legacy/entity-project")
     monkeypatch.setenv("OPENROUTER_API_KEY", "openrouter-key")
 
     settings = dataset_module.load_settings(require_openrouter=True)
@@ -425,7 +424,6 @@ def test_load_settings_defaults_wandb_project(monkeypatch):
     monkeypatch.setenv("WANDB_API_KEY", "test-key")
     monkeypatch.setenv("WANDB_ENTITY", "test-entity")
     monkeypatch.delenv("WANDB_PROJECT", raising=False)
-    monkeypatch.delenv("WEAVE_PROJECT", raising=False)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
     settings = dataset_module.load_settings(require_openrouter=False)
@@ -433,7 +431,7 @@ def test_load_settings_defaults_wandb_project(monkeypatch):
     assert settings.weave_project == f"test-entity/{dataset_module.DATASET_NAME}"
 
 
-def test_load_settings_accepts_legacy_weave_project(monkeypatch):
+def test_load_settings_requires_wandb_entity(monkeypatch):
     monkeypatch.setattr(dataset_module, "load_dotenv", lambda *args, **kwargs: None)
     monkeypatch.setenv("WANDB_API_KEY", "test-key")
     monkeypatch.delenv("WANDB_ENTITY", raising=False)
@@ -441,9 +439,10 @@ def test_load_settings_accepts_legacy_weave_project(monkeypatch):
     monkeypatch.setenv("WEAVE_PROJECT", "legacy/project")
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
-    settings = dataset_module.load_settings(require_openrouter=False)
+    with pytest.raises(SystemExit) as excinfo:
+        dataset_module.load_settings(require_openrouter=False)
 
-    assert settings.weave_project == "legacy/project"
+    assert "WANDB_ENTITY" in str(excinfo.value)
 
 
 # ---------------------------------------------------------------------------
