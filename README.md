@@ -77,115 +77,107 @@ WANDB_PROJECT=evals-seminar-20260910
 - `WANDB_ENTITY`: Dataset・Evaluation・Traceの記録先となるW&B entity
 - `WANDB_PROJECT`: Dataset・Evaluation・Traceの記録先となるW&B project（省略時は `evals-seminar-20260910`）
 
-## UIの起動（対話アプリ）
+## Web UIでの動作確認
 
-Next.js + CopilotKitで実装された対話UIを起動します。エージェントの挙動をブラウザ上で対話的に確認できます。
+Next.js + CopilotKitで実装されたWeb UIを起動します。エージェントの動作をブラウザで確認できます。
 
 ```bash
 npm run dev
 ```
 
-http://localhost:3000 を開き、チャット欄にarXiv論文のURLを貼り付けるとスライド生成が始まります。左側にスライドのプレビューが表示され、生成完了後はPPTXをダウンロードできます。
+http://localhost:3000 を開き、チャット欄に次のようにarXiv論文のURLを貼り付けます。
 
-ヘッダーの「ワークスペース」で `baseline` / `improvement-1` / `improvement-2` を切り替えられ、スキルの作り込み段階による挙動の違いを対話で見比べられます。切り替えると会話はリセットされます。
+```
+https://arxiv.org/abs/1706.03762
+```
 
-会話ごとに独立したrun workspaceが作られ、同じ会話の複数ターンでは同じrun workspaceを再利用します。
+生成されるスライドの構成案を確認して、次のようにスライドの生成を依頼します。
+
+```
+OKです。この構成でスライドを生成してください。
+```
+
+スライドが生成され、画面左側にスライドのプレビューが表示されます。
 
 > [!NOTE]
-> 会話の状態はインメモリで保持されるため、devサーバを再起動すると過去の会話の続きからは再開できません。
+> ヘッダーの「ワークスペース」は、後述する `baseline` / `improvement-1` / `improvement-2` の切り替えです。
+
+### Agent Traceの確認
 
 `WANDB_API_KEY`、`WANDB_ENTITY`、`WANDB_PROJECT`を設定すると、各ユーザー発言を1 Turnとして、モデル呼び出し・ツール呼び出し・SubAgent呼び出しが`${WANDB_ENTITY}/${WANDB_PROJECT}`のWeave Agents画面に記録されます。SubAgentは呼び出し全体のみを記録し、その内部のモデル・ツール呼び出しは記録しません。
 
 UIでスライドが生成されると、PPTX本体もWeaveの`trace_presentation` Callへ自動的に記録されます。CallにはWeave上で確認できるHTMLプレビューも付き、対応するAgent TraceにはCall参照が`trace_presentation`ツール結果として残ります。同じconversation内の同一スライドは1回だけ記録されるため、UIの再描画でCallが重複することはありません。PPTXのダウンロード操作は従来どおり同じconversation IDへ別イベントとして記録されます。
 
-## ワークスペースの構成
+## エージェントの構成
 
-`workspaces/<variant>/` は設定（`AGENTS.md`）とスキル（`.agent/skills/`）を保持する読み取り専用のworkspace templateです。CLI・Web UI・評価はいずれもtemplateを直接使わず、実行時に `tmp/workspaces/<yyyyMMddHHmmss>-<variant>-<runId>/` へrun workspaceを作成して、その中で動作します。
+スライド生成エージェントは、指定したワークスペースの`AGENTS.md`と`.agent/skills/`を読み込んで動作します。
+ワークスペースは`workspaces/<variant>/`にあり、`<variant>`は次の3つです。
 
-| 実行経路         | run workspaceの分離単位 |
-| ---------------- | ----------------------- |
-| 手動CLI          | コマンド実行ごと        |
-| Web UI           | conversationごと        |
-| Weave Evaluation | Dataset行の実行ごと     |
+- `baseline`：スキルはワークフローの機構のみ（取得手順・JSON形式・枚数・確認フロー）
+- `improvement-1`：スライド設計ガイドを追加（詰め込み禁止・主張型タイトル・論理的な流れ）
+- `improvement-2`：保存前の事実確認を追加（本文照合・一般化禁止・照合できない数値は書かない）
 
-これにより、並列実行や再実行でファイルが競合したり、過去の生成物を誤って読むことがありません。run workspaceは実行後も調査用に残り、自動削除されません（`tmp/`配下はGit管理外です。不要になったら手動で削除してください）。
+### エージェントのCLIでの実行
 
-## エージェントの実行（ヘッドレスランナー）
-
-ヘッドレスランナーで同じワークフローをコマンドラインから再現します。
-
-一度のコマンド実行で、以下の2つの会話ターンが自動で実行されます。
-
-1. ターン1: 論文URLを渡す → エージェントが論文を取得・分析し、アウトラインを提案する
-2. ターン2: 「OKです。この構成でスライドを生成してください。」→ `generate_pptx` ツールで生成する
+スライド生成エージェントは次のようにCLIでも実行できます。
 
 ```bash
-npm run agent -- 1706.03762 baseline
-npm run agent -- 1706.03762 improvement-1
-npm run agent -- 1706.03762 improvement-2
+npm run agent -- 1706.03762 baseline # ハンズオンではこのコマンドは実行しません
 ```
 
-実行結果は `results/<variant>/<arXiv ID>.json` に保存されます。スライドJSON・実行中のツール呼び出し（サブエージェント内を含む）・所要時間が入っています。
+> [!NOTE]
+> 上記のコマンドを実行すると、論文URLを渡すターンと、「OKです。この構成でスライドを生成してください。」で生成を承認するターンの2ターンが自動で実行されます。
 
-`results/` は手動実行の成果物置き場（Git管理外・実行時に自動生成）であり、後述のライブ評価はこのファイルを読みません。元リポジトリでの改善実験の出力は [docs/logs/20260813-archive-original-eval-results/](docs/logs/20260813-archive-original-eval-results/) にアーカイブしています。
+## オフライン評価のハンズオン
 
-ヘッドレスランナーの2ターンも同じconversation IDでWeaveへ送信されます。プロセス終了前にOpenTelemetry spanをflushするため、短命なCLI実行でもトレースが欠落しないようにしています。
+Weaveを使用したオフライン評価を実施します。
 
-### 使用論文
+### 1. Datasetのpublish
 
-- Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, Illia Polosukhin. "Attention Is All You Need." NeurIPS 2017. [arXiv:1706.03762](https://arxiv.org/abs/1706.03762)
-- Jeremy Yang, Noah Yonack, Kate Zyskowski, Denis Yarats, Johnny Ho, Jerry Ma. "The Adoption and Usage of AI Agents: Early Evidence from Perplexity." 2025. [arXiv:2512.07828](https://arxiv.org/abs/2512.07828)
-- Shirley Wu, Evelyn Choi, Arpandeep Khatua, Zhanghan Wang, Joy He-Yueya, Tharindu Cyril Weerasooriya, Wei Wei, Diyi Yang, Jure Leskovec, James Zou. "HumanLM: Simulating Users with State Alignment Beats Response Imitation." 2026. [arXiv:2603.03303](https://arxiv.org/abs/2603.03303)
-
-## 評価の実行（Weaveライブ評価）
-
-3つのスキルの作り込み段階を持ち、各改善を直前の段階における改善と比較します。
-
-```
-baseline        スキルはワークフローの機構のみ(取得手順・JSON形式・枚数・確認フロー)
-  ↓ +スライド設計ガイド                → 主にSlide Qualityで比較
-improvement-1   詰め込み禁止・主張型タイトル・論理的な流れ
-  ↓ +保存前の事実確認                  → 主にHallucination Free(本文への忠実性)で比較
-improvement-2   本文照合・一般化禁止・照合できない数値は書かない
-```
-
-評価はWeaveの`Evaluation`によるライブ評価です。Datasetの各行についてTypeScriptエージェントをその場で実行し、出力をscorerで採点します。評価結果の正本はWeaveであり、ローカルJSONが必要な場合はEvaluation完了後にWeave Evaluation APIからエクスポートします（評価入力としては使用しません）。
-
-### 1. Datasetのpublish（初回のみ）
-
-3本の論文（上記「使用論文」）を、自分のprojectへWeave Datasetとしてpublishします。
+3本の論文（下記「使用論文」）を、自分のprojectへWeave Datasetとしてpublishします。
 
 ```bash
 uv run eval/publish_dataset.py
 ```
 
-行データはリポジトリで固定されており、`source_text`（judgeが参照する評価基準の論文本文）はpublish時にar5ivから取得してDataset versionへ保存されます。Weaveのオブジェクトはcontent-addressedのため、同じ内容の再publishは新しいversionを作らず、Datasetのversion（digest）は参加者全員で一致します。
+使用する論文は`eval/dataset.py`に記載されています。
 
-### 2. ライブ評価
+#### 使用論文
+
+- Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, Illia Polosukhin. "Attention Is All You Need." NeurIPS 2017. [arXiv:1706.03762](https://arxiv.org/abs/1706.03762)
+- Jeremy Yang, Noah Yonack, Kate Zyskowski, Denis Yarats, Johnny Ho, Jerry Ma. "The Adoption and Usage of AI Agents: Early Evidence from Perplexity." 2025. [arXiv:2512.07828](https://arxiv.org/abs/2512.07828)
+- Shirley Wu, Evelyn Choi, Arpandeep Khatua, Zhanghan Wang, Joy He-Yueya, Tharindu Cyril Weerasooriya, Wei Wei, Diyi Yang, Jure Leskovec, James Zou. "HumanLM: Simulating Users with State Alignment Beats Response Imitation." 2026. [arXiv:2603.03303](https://arxiv.org/abs/2603.03303)
+
+### 2. オフライン評価（ベースライン）
+
+次のコマンドで、ベースラインでのオフライン評価を実行します。
 
 ```bash
 uv run eval/run_eval.py baseline
 ```
 
-publish済みのDatasetをrefで取得し、3論文それぞれについてエージェントを実行して採点します。各Dataset行の実行は1回で、反復回数のオプションはありません。評価は`EvaluationLogger`へ`SlideAgentModel(weave.Model)`を渡して記録するため、評価時もAgent modelのversionが追跡されます。
+`eval/run_eval.py`では、publish済みのDatasetをrefで取得し、3論文それぞれについてエージェントを実行して採点します。評価は`EvaluationLogger`へ`SlideAgentModel(weave.Model)`を渡して記録するため、評価時もAgent modelのversionが追跡されます。
 
-品質軸は次の4つです。
+評価指標は次の4つです。
 
-| 品質軸             | scorer               | 実装                                        |
+| 評価指標           | scorer               | 実装                                        |
 | ------------------ | -------------------- | ------------------------------------------- |
 | Tool Correctness   | `tool_correctness`   | 自作function-based scorer（決定的判定）     |
 | Summarization      | `summarization`      | プリセット`SummarizationScorer`への移譲     |
 | Hallucination Free | `hallucination_free` | プリセット`HallucinationFreeScorer`への移譲 |
 | Slide Quality      | `SlideQualityScorer` | 自作class-based scorer（LLM-as-a-judge）    |
 
-scorerは数値だけでなく判定理由も返し、Weave上でDataset・Model・scorerのバージョンとともに記録されます。judgeはlitellm経由の`openrouter/openai/gpt-5.4`です。
+scorerは数値だけでなく判定理由も返し、Weave上でDataset・Model・scorerのバージョンとともに記録されます。LLM-as-a-judgeのモデルはlitellm経由の`openrouter/openai/gpt-5.4`です。
 
-### 3. variantの比較（Compare evaluations）
+### 3. オフライン評価（改善後）
 
-時間と予算に余裕がある場合は、残りのvariantも同じコマンドで評価します。
+改善を施した`improvement-1`と`improvement-2`のvariantについても、同じコマンドでオフライン評価を実行します。1つの評価に7〜9分かかるため、ターミナルを2つ開いて同時に実行してください。
 
 ```bash
 uv run eval/run_eval.py improvement-1
+```
+
+```bash
 uv run eval/run_eval.py improvement-2
 ```
 
@@ -224,54 +216,9 @@ W&BのUI上で”User frustration”のSignalsを設定し、再度アプリケ�
 
 ![WeaveのAgent SignalsタブでUser frustrationタグを確認する画面](docs/images/weave-user-frustration-signal.png)
 
-## ファイル構成
+## 開発者向け
 
-```text
-.
-├── agent/                      # 第32回から流用したエージェント本体
-│   ├── agent.ts                # createDeepAgent定義(モデルはOpenRouter経由に変更)
-│   ├── generate-pptx-tool.ts   # generate_pptxツール(スキーマ検証内蔵)
-│   ├── run-workspace.ts        # templateからrun workspaceを作成する共通処理
-│   ├── system-prompt.ts        # システムプロンプト
-│   ├── weave-agent-tracing.ts  # Agent Trace用ミドルウェアとラッパー
-│   └── weave-client.ts         # Weave初期化・flush
-├── agent-run/
-│   ├── cli.ts                  # 手動実行用CLI(薄いラッパー)
-│   ├── runner.ts               # runSlideAgent()本体(2ターン実行と結果の捕捉)
-│   └── eval.ts                 # 評価用エントリポイント(evaluation-result.jsonを出力)
-├── app/                        # 第32回から移植した対話UI(Next.js + CopilotKit)
-│   ├── api/copilotkit/route.ts # CopilotKitランタイム(conversation単位のagent管理)
-│   ├── components/             # スライドプレビュー・ツール呼び出し表示
-│   ├── page.tsx                # 画面本体(ワークスペース切り替え付き)
-│   └── variants.ts             # ワークスペース一覧の共有定数
-├── workspaces/                 # 読み取り専用のworkspace template
-│   ├── baseline/               # 機構のみのスキル
-│   ├── improvement-1/          # +スライド設計ガイド
-│   └── improvement-2/          # +保存前の事実確認
-├── tmp/
-│   └── workspaces/             # 実行時に作られるrun workspace(Git管理外)
-├── eval/
-│   ├── dataset.py              # Dataset行の組み立てと環境変数検証
-│   ├── publish_dataset.py      # 自分のprojectへDatasetをpublish
-│   ├── scorers.py              # 4つの品質軸のscorer
-│   ├── agent_model.py          # SlideAgentModelとsubprocess境界
-│   ├── run_eval.py             # weave.Evaluationの実行
-│   └── tests/test_eval.py      # 単体テスト
-├── results/                    # 手動実行(npm run agent)の成果物(Git管理外・実行時に自動生成)
-├── docs/
-│   ├── setup/                  # ツールのインストール手順
-│   └── logs/                   # 取り組みごとの実装方針・計画の記録(元リポジトリの評価実験アーカイブを含む)
-├── package.json
-├── pyproject.toml
-└── .env.sample
-```
-
-## 確認コマンド
-
-```bash
-npm run check
-uv run pytest
-```
+リポジトリの構成、run workspaceの仕組み、CLIでの実行、評価の内部については[開発者向けガイド](docs/development.md)を参照してください。
 
 ## 参考リンク
 
