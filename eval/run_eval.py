@@ -5,7 +5,7 @@
     uv run eval/run_eval.py improvement-1
     uv run eval/run_eval.py improvement-2
 
-EvaluationLoggerが作るCall IDを別processのTypeScript Agentへ渡し、Agent Traceを
+Evaluationが作るCall IDを別processのTypeScript Agentへ渡し、Agent Traceを
 各evaluation resultへ紐付ける。各Dataset行の実行は1回で、反復回数のオプションは
 無い。評価結果の正本はWeaveであり、results/<variant>/は評価入力として読まない。
 """
@@ -13,12 +13,16 @@ EvaluationLoggerが作るCall IDを別processのTypeScript Agentへ渡し、Agen
 import argparse
 import asyncio
 from typing import Any
+from time import perf_counter
+from types import SimpleNamespace
+
+from pydantic import PrivateAttr
 
 import weave
 from agent_model import SlideAgentModel
 from dataset import DATASET_NAME, VARIANTS, load_settings
 from scorers import build_scorers
-from weave.flow.scorer import apply_scorer_async, get_scorer_attributes
+from weave.flow.scorer import get_scorer_attributes
 
 
 def build_eval_context(
@@ -37,84 +41,62 @@ def build_eval_context(
     }
 
 
-async def apply_and_log_scorer(
-    *, prediction: Any, scorer: Any, example: dict[str, Any], output: dict
-) -> None:
-    """既存scorerをそのまま実行し、EvaluationLoggerへ結果を記録する。"""
-    scorer_attributes = get_scorer_attributes(scorer)
+class SlideEvaluation(weave.Evaluation):
+    """Dataset/scorer参照を保存し、採点失敗時も他のscorerを実行する。"""
 
-    # log_score contextの内側で実行することで、judge LLMのusage/costを
-    # predict costではなく該当scorerへ帰属させる。
-    with prediction.log_score(scorer_attributes.scorer_name) as logged_score:
-        # Weave標準の実行経路を使い、function-based scorerの引数解決に加えて
-        # class-based scorerへインスタンス(self)を正しくbindする。
-        result = await apply_scorer_async(scorer, example, output)
-        logged_score.value = result.result
+    _errors: int = PrivateAttr(default=0)
+
+    @weave.op(name="Evaluation.predict_and_score")
+    async def predict_and_score(self, model: Any, example: dict) -> dict:
+        row_call = weave.require_current_call()
+        context = build_eval_context(
+            SimpleNamespace(
+                evaluate_call=SimpleNamespace(id=row_call.parent_id),
+                predict_and_score_call=row_call,
+            ),
+            example_id=str(example["arxiv_id"]),
+            evaluation_name=self.name,
+        )
+        started = perf_counter()
+        try:
+            output, model_call = await model.predict.call(
+                model,
+                arxiv_id=example["arxiv_id"],
+                paper_url=example["paper_url"],
+                eval_context=context,
+            )
+        except Exception:
+            self._errors += 1
+            raise
+        latency = perf_counter() - started
+        scores = {}
+        for scorer in self.scorers or []:
+            scorer_name = get_scorer_attributes(scorer).scorer_name
+            try:
+                # 標準APIでmodel callへのscore feedbackも保存する。
+                result = await model_call.apply_scorer(scorer, example)
+                scores[scorer_name] = result.result
+            except Exception as error:
+                self._errors += 1
+                print(
+                    f"[scorer error] example={example['arxiv_id']} "
+                    f"scorer={scorer_name}: {error}"
+                )
+        return {"output": output, "scores": scores, "model_latency": latency}
 
 
 async def run_evaluation(*, variant: str, dataset: Any) -> tuple[str | None, int]:
-    """EvaluationLoggerを使い、Dataset全行を1 trialずつ評価する。"""
+    """標準EvaluationへDatasetと実scorerを渡し、行別scoreと集計を保存する。"""
     model = SlideAgentModel(variant=variant)
-    scorers = build_scorers()
-    scorer_names = [
-        get_scorer_attributes(scorer).scorer_name for scorer in scorers
-    ]
-    eval_logger = weave.EvaluationLogger(
+    evaluation = SlideEvaluation(
         name=variant,
-        model=model,
+        evaluation_name=variant,
         dataset=dataset,
-        scorers=scorer_names,
+        scorers=build_scorers(),
+        trials=1,
     )
-    errors = 0
-
-    try:
-        for row in dataset.rows:
-            # published Datasetのrow objectをそのまま渡すことでrow refを維持する。
-            example = row
-            example_id = str(example["arxiv_id"])
-            try:
-                with eval_logger.log_prediction(
-                    inputs=example,
-                    example_id=example_id,
-                    trial_index=0,
-                ) as prediction:
-                    eval_context = build_eval_context(
-                        prediction,
-                        example_id=example_id,
-                        evaluation_name=variant,
-                    )
-                    output = await model.predict(
-                        arxiv_id=example["arxiv_id"],
-                        paper_url=example["paper_url"],
-                        eval_context=eval_context,
-                    )
-                    prediction.output = output
-
-                    for scorer in scorers:
-                        try:
-                            await apply_and_log_scorer(
-                                prediction=prediction,
-                                scorer=scorer,
-                                example=example,
-                                output=output,
-                            )
-                        except Exception as error:
-                            errors += 1
-                            scorer_name = get_scorer_attributes(scorer).scorer_name
-                            print(
-                                f"[scorer error] example={example_id} "
-                                f"scorer={scorer_name}: {error}"
-                            )
-            except Exception as error:
-                errors += 1
-                print(f"[prediction error] example={example_id}: {error}")
-    except BaseException as error:
-        eval_logger.fail(error)
-        raise
-    else:
-        eval_logger.log_summary()
-
-    return eval_logger.ui_url, errors
+    _, call = await evaluation.evaluate.call(evaluation, model)
+    return call.ui_url, evaluation._errors
 
 
 def main() -> None:

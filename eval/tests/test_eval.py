@@ -185,51 +185,95 @@ async def test_slide_quality_scorer_skips_judge_without_slide_text(monkeypatch):
     assert result["passed"] is False
 
 
-class FakeLoggedScore:
-    def __init__(self):
-        self.value = None
+async def test_evaluation_records_dataset_scores_summary_and_agent_context(monkeypatch):
+    import weave
+    from weave.flow.scorer import apply_scorer_async
 
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, traceback):
-        return False
-
-
-class FakePrediction:
-    def __init__(self):
-        self.scorer_name = None
-        self.logged_score = None
-
-    def log_score(self, scorer_name):
-        self.scorer_name = scorer_name
-        self.logged_score = FakeLoggedScore()
-        return self.logged_score
-
-
-async def test_apply_and_log_scorer_binds_class_scorer_self(monkeypatch):
-    async def fake_acompletion(**kwargs):
-        return _fake_completion_response(
-            json.dumps({"score": 8, "reason": "主張が明確"})
-        )
-
-    monkeypatch.setattr(scorers_module.litellm, "acompletion", fake_acompletion)
-    prediction = FakePrediction()
-    scorer = SlideQualityScorer(judge_model=JUDGE_MODEL)
-
-    await run_eval_module.apply_and_log_scorer(
-        prediction=prediction,
-        scorer=scorer,
-        example={"source_text": "本文テキスト"},
-        output=SUCCESS_OUTPUT,
-    )
-
-    assert prediction.scorer_name == "SlideQualityScorer"
-    assert prediction.logged_score.value == {
-        "score": 0.8,
-        "passed": True,
-        "reason": "主張が明確",
+    row = {
+        "arxiv_id": "1706.03762",
+        "paper_url": "https://arxiv.org/abs/1706.03762",
+        "source_text": "本文テキスト",
+        "expected_tools": ["execute", "generate_pptx"],
     }
+    dataset = weave.Dataset(name="test-papers", rows=[row])
+    evaluation = run_eval_module.SlideEvaluation(
+        name="baseline", dataset=dataset,
+        scorers=[tool_correctness, SlideQualityScorer(judge_model=JUDGE_MODEL)],
+    )
+    monkeypatch.setattr(
+        weave, "require_current_call",
+        lambda: SimpleNamespace(id="row-call", parent_id="eval-call"),
+    )
+    async def fake_acompletion(**kwargs):
+        return _fake_completion_response(json.dumps({"score": 8, "reason": "明確"}))
+    monkeypatch.setattr(scorers_module.litellm, "acompletion", fake_acompletion)
+    attached_scores = []
+    async def apply_scorer(scorer, example):
+        attached_scores.append(scorer)
+        return await apply_scorer_async(scorer, example, SUCCESS_OUTPUT)
+    async def predict_call(model, **kwargs):
+        assert kwargs["eval_context"]["weave.eval.run_id"] == "eval-call"
+        assert kwargs["eval_context"]["weave.eval.predict_and_score_call_id"] == "row-call"
+        return SUCCESS_OUTPUT, SimpleNamespace(apply_scorer=apply_scorer)
+    model = SimpleNamespace(predict=SimpleNamespace(call=predict_call))
+    # 本物のSDKが保存するEvaluationフィールドと集計を確認する。
+    assert evaluation.dataset.name == "test-papers"
+    assert list(evaluation.dataset.rows) == [row]
+    assert len(evaluation.scorers) == 2
+    result = await evaluation.predict_and_score(model, row)
+    assert result["scores"]["tool_correctness"]["passed"] is True
+    assert result["scores"]["SlideQualityScorer"]["score"] == 0.8
+    assert len(attached_scores) == 2
+    from weave.evaluation.eval import EvaluationResults
+    summary = await evaluation.summarize(EvaluationResults(rows=weave.Table([result])))
+    assert summary["tool_correctness"]["passed"]["true_fraction"] == 1.0
+    assert summary["SlideQualityScorer"]["score"]["mean"] == 0.8
+    assert evaluation._errors == 0
+
+
+async def test_evaluation_continues_after_scorer_error(monkeypatch):
+    import weave
+    monkeypatch.setattr(
+        weave, "require_current_call",
+        lambda: SimpleNamespace(id="row-call", parent_id="eval-call"),
+    )
+    async def apply_scorer(scorer, example):
+        if scorer is tool_correctness:
+            raise RuntimeError("judge unavailable")
+        return SimpleNamespace(result={"score": 0.8})
+    async def predict_call(model, **kwargs):
+        return SUCCESS_OUTPUT, SimpleNamespace(apply_scorer=apply_scorer)
+    evaluation = run_eval_module.SlideEvaluation(
+        name="baseline", dataset=[{"arxiv_id": "x", "paper_url": "url"}],
+        scorers=[tool_correctness, SlideQualityScorer(judge_model=JUDGE_MODEL)],
+    )
+    result = await evaluation.predict_and_score(
+        SimpleNamespace(predict=SimpleNamespace(call=predict_call)),
+        {"arxiv_id": "x", "paper_url": "url"},
+    )
+    assert "tool_correctness" not in result["scores"]
+    assert result["scores"]["SlideQualityScorer"] == {"score": 0.8}
+    assert evaluation._errors == 1
+
+
+async def test_evaluation_counts_prediction_error(monkeypatch):
+    import weave
+    monkeypatch.setattr(
+        weave, "require_current_call",
+        lambda: SimpleNamespace(id="row-call", parent_id="eval-call"),
+    )
+    async def predict_call(model, **kwargs):
+        raise RuntimeError("agent failed")
+    evaluation = run_eval_module.SlideEvaluation(
+        name="baseline", dataset=[{"arxiv_id": "x", "paper_url": "url"}],
+        scorers=[tool_correctness],
+    )
+    with pytest.raises(RuntimeError, match="agent failed"):
+        await evaluation.predict_and_score(
+            SimpleNamespace(predict=SimpleNamespace(call=predict_call)),
+            {"arxiv_id": "x", "paper_url": "url"},
+        )
+    assert evaluation._errors == 1
 
 
 # ---------------------------------------------------------------------------

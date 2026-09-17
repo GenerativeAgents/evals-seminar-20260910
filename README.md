@@ -144,31 +144,6 @@ npm run agent -- 1706.03762 improvement-2
 
 ヘッドレスランナーの2ターンも同じconversation IDでWeaveへ送信されます。プロセス終了前にOpenTelemetry spanをflushするため、短命なCLI実行でもトレースが欠落しないようにしています。
 
-
-## Self-improvementへの導入
-W&Bは、W&Bに保存された情報をCoding Agentが取得できる[W&B Skills](https://github.com/wandb/skills)・[W&B MCP](https://github.com/wandb/wandb-mcp-server)を提供しています。W&B Skillsのinstallは[こちら](https://github.com/wandb/skills)からできます。
-
-その後、Coding Agentに以下の指示をしてください。Coding Agentが改善を自律的に行う様子が確認できるかと思います。改良するAgentの構成対象や指標を指定することで、精度の高い改善を行うことができます。いきなりloopを回さずにまずは一つずつ改善を積み重ねていきましょう。
-
-```text
-$wandb-primary　を使い、Evaluation id: <ご自身のWeaveのEvaluation IDを入力してください。Evaluationの隣のコードをクリックするとコピーができます>
-の評価結果を分析してください。
-その後 bottle neckを一つ改善し、再度評価を行い、その結果をweaveに保存してください。
-なお、修正と実行はworktreeで行ってください
-```
-
-## オンライン評価
-大量のTraceをすべて人が読むことは現実的ではありません。W&B Weave SignalsはAgentのTurnを評価し、User FrustrationやLow Quality ResponseなどのTag、User SatisfactionやResponse QualityなどのRatingとして可視化するBuilt-inのオンライン評価機能です。Custom Signalも定義できます。さらにAutomationsを設定すると、Monitor metricやTrace activityを条件としてSlack通知やWebhookを実行できます。詳しくは[シグナルを使ってエージェントをモニタリングする](https://docs.wandb.ai/ja/weave/guides/tracking/view-agent-signals)、[カスタムモニターを設定する](https://docs.wandb.ai/ja/weave/guides/evaluation/custom-monitors)、[オートメーションを設定する](https://docs.wandb.ai/ja/weave/guides/evaluation/automations)を参照してください。
-
-W&BのUI上で”User frustration”のSignalsを設定し、再度アプリケーションを起動した後、会話の中で
-```text
-いえ、内容がよくないです。もっと論理的にわかりやすい構造にしてください
-```
-などの不満を入れてみてください。WeaveのAgent->SignalsのタブにてUser frustrationのtagがついているかどうか、確認をしてみてください。
-
-![WeaveのAgent SignalsタブでUser frustrationタグを確認する画面](docs/images/weave-user-frustration-signal.png)
-
-
 ### 使用論文
 
 - Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, Illia Polosukhin. "Attention Is All You Need." NeurIPS 2017. [arXiv:1706.03762](https://arxiv.org/abs/1706.03762)
@@ -195,7 +170,7 @@ uv run eval/publish_dataset.py
 uv run eval/run_eval.py baseline
 ```
 
-publish済みのDatasetをrefで取得し、3論文それぞれについてエージェントを実行して採点します。各Dataset行の実行は1回で、反復回数のオプションはありません。評価は`EvaluationLogger`へ`SlideAgentModel(weave.Model)`を渡して記録するため、評価時もAgent modelのversionが追跡されます。
+publish済みのDatasetをrefで取得し、3論文それぞれについてエージェントを実行して採点します。各Dataset行の実行は1回で、反復回数のオプションはありません。評価は`weave.Evaluation`を継承した`SlideEvaluation`へDatasetと4つのscorerを登録し、`SlideAgentModel(weave.Model)`を渡して記録します。Dataset・scorer・Agent modelのversionに加え、各行のscoreと評価全体の集計値を保存します。
 
 品質軸は次の4つです。
 
@@ -221,7 +196,7 @@ uv run eval/run_eval.py improvement-2
 
 ### 4. Evaluation行からAgent Traceを調査する
 
-各Dataset行の実行時に、`EvaluationLogger.log_prediction()`が発行した`weave.eval.run_id`と`weave.eval.predict_and_score_call_id`をTypeScriptエージェントへ渡します。これらの属性はモデル呼び出し・ツール呼び出し・SubAgent呼び出しを含む全Agent spanへ記録されるため、Evaluation詳細の「View spans」から対応するAgent Traceを直接調査できます。
+各Dataset行の実行時に、`Evaluation.evaluate`と`Evaluation.predict_and_score`のCall IDを、それぞれ`weave.eval.run_id`と`weave.eval.predict_and_score_call_id`としてをTypeScriptエージェントへ渡します。これらの属性はモデル呼び出し・ツール呼び出し・SubAgent呼び出しを含む全Agent spanへ記録されるため、Evaluation詳細の「View spans」から対応するAgent Traceを直接調査できます。
 
 LLM spanにはOpenRouter応答のinput/output/reasoning/cache token usageを記録し、`gen_ai.usage.total_tokens`とOpenRouterが返す実課金値`openrouter.usage.cost`も保存します。Model出力の`conversation_id`（`<variant>:<thread_id>`形式）はAgents画面のconversation IDにも対応しています。
 

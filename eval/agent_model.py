@@ -1,6 +1,6 @@
 """SlideAgentModelとTypeScriptエージェントとのsubprocess境界。
 
-Weave EvaluationLoggerのDataset行ごとに`agent-run/eval.ts`を1回起動し、
+Weave EvaluationのDataset行ごとに`agent-run/eval.ts`を1回起動し、
 run workspaceへ書かれたevaluation-result.jsonを読み取ってModel出力にする。
 プロセスの起動失敗・タイムアウト・JSONプロトコル違反はインフラエラーとして
 例外にし、Weave上でもその行の実行をerrorにする。
