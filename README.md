@@ -29,11 +29,6 @@ Visual Studio CodeのDev Containers拡張機能を使い、コンテナ内に開
 1. [Node.js](https://nodejs.org/)（22系はv22.23.4以上、24系はv24.22.1以上、26系はv26.12.1以上）をインストールします
 2. [uv](https://docs.astral.sh/uv/getting-started/installation/)（v0.13.4以上）をインストールします
 
-Dev ContainerはNode.js 22.23.4、uv 0.13.4を使用し、構築時にOSのCA証明書を更新します。
-Python依存のcertifiは2026.10.19以上、pipは26.2.2以上を要求します。
-これらは2026年10月のNode.jsセキュリティ修正とemSign CA事故への対応です。
-直接インストールする場合も、OSのCA証明書をディストリビューションの対応版へ更新してください。
-
 ## セットアップ
 
 1. リポジトリをクローンします
