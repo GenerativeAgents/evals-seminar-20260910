@@ -26,8 +26,8 @@ Visual Studio CodeのDev Containers拡張機能を使い、コンテナ内に開
 
 ### 方法B: Node.jsとuvを直接インストールする
 
-1. [Node.js](https://nodejs.org/)（v22以上）をインストールします
-2. [uv](https://docs.astral.sh/uv/getting-started/installation/)をインストールします
+1. [Node.js](https://nodejs.org/)（22系はv22.23.4以上、24系はv24.22.1以上、26系はv26.12.1以上）をインストールします
+2. [uv](https://docs.astral.sh/uv/getting-started/installation/)（v0.13.4以上）をインストールします
 
 ## セットアップ
 

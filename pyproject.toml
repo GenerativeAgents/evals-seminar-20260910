@@ -18,3 +18,8 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["eval/tests"]
 asyncio_mode = "auto"
+
+[tool.uv]
+required-version = ">=0.13.4"
+# Minimum versions with the emSign CA incident fix, including transitive pip.
+constraint-dependencies = ["certifi>=2026.10.19", "pip>=26.2.2"]
